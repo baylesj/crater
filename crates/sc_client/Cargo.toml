@@ -1,0 +1,33 @@
+[package]
+name = "sc_client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Unofficial SoundCloud v2 API client for crater"
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+regex = { workspace = true }
+once_cell = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[features]
+default = []
+# Gate integration tests that hit the real SoundCloud API.
+# Run with: cargo test --features live-tests -- --nocapture
+live-tests = []
+
+[[example]]
+name = "search_demo"
+path = "examples/search_demo.rs"
