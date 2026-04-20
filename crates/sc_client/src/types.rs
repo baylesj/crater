@@ -145,6 +145,18 @@ impl Track {
                 return false;
             }
         }
+        // Duration is a server-side param but we enforce it client-side too
+        // since the API occasionally returns tracks outside the range.
+        if let Some(max_ms) = filters.duration_to_ms {
+            if self.duration.unwrap_or(u64::MAX) > max_ms {
+                return false;
+            }
+        }
+        if let Some(min_ms) = filters.duration_from_ms {
+            if self.duration.unwrap_or(0) < min_ms {
+                return false;
+            }
+        }
         true
     }
 

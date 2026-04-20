@@ -23,13 +23,14 @@ async fn main() -> anyhow::Result<()> {
     let client = Client::new()?;
 
     let filters = SearchFilters {
-        query: Some("liquid".into()),
-        genre_or_tag: Some("drum & bass".into()),
-        bpm_from: Some(170),
-        bpm_to: Some(178),
-        max_plays: Some(1000), // the magic "undiscovered" filter
-        min_likes: Some(3),    // exclude pure noise
-        limit: Some(50),
+        query:          Some("liquid".into()),
+        genre_or_tag:   Some("drum & bass".into()),
+        bpm_from:       Some(170),
+        bpm_to:         Some(178),
+        max_plays:      Some(1000),        // the magic "undiscovered" filter
+        min_likes:      Some(3),           // exclude pure noise
+        duration_to_ms: Some(10 * 60 * 1000), // 10 min cap — no hour-long mixes
+        limit:          Some(50),
         ..Default::default()
     };
 
@@ -65,15 +66,18 @@ async fn main() -> anyhow::Result<()> {
             .as_ref()
             .and_then(|u| u.username.as_deref())
             .unwrap_or("(unknown)");
-        let plays = t.playback_count.unwrap_or(0);
-        let likes = t.likes_count.unwrap_or(0);
-        let url = t.permalink_url.as_deref().unwrap_or("");
+        let plays    = t.playback_count.unwrap_or(0);
+        let likes    = t.likes_count.unwrap_or(0);
+        let duration = t.duration.map(|ms| format!("{}:{:02}", ms / 60_000, (ms % 60_000) / 1000))
+                        .unwrap_or_else(|| "?:??".into());
+        let url      = t.permalink_url.as_deref().unwrap_or("");
 
         println!(
-            "{:>2}. {} — {}\n     {} plays · {} likes · ratio {:.3}\n     {}",
+            "{:>2}. {} — {}\n     {} · {} plays · {} likes · ratio {:.3}\n     {}",
             i + 1,
             artist,
             title,
+            duration,
             plays,
             likes,
             t.engagement_ratio().unwrap_or(0.0),
