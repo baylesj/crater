@@ -56,7 +56,7 @@ impl FromStr for PlaylistVisibility {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Digest {
     pub id:          i64,
     pub spec:        DigestSpec,
@@ -158,6 +158,43 @@ pub async fn update_digest(pool: &SqlitePool, id: i64, spec: &DigestSpec) -> Res
     .await?;
 
     get_digest(pool, id).await?.ok_or(CoreError::NotFound)
+}
+
+/// A row from `digest_runs`, serializable for the API.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct DigestRunRow {
+    pub id:             i64,
+    pub digest_id:      Option<i64>,
+    pub digest_name:    String,
+    pub ran_at:         DateTime<Utc>,
+    pub finished_at:    Option<DateTime<Utc>>,
+    pub status:         String,
+    pub playlist_sc_id: Option<i64>,
+    pub playlist_url:   Option<String>,
+    pub track_count:    Option<i64>,
+    pub pages_scanned:  Option<i64>,
+    pub error:          Option<String>,
+}
+
+pub async fn list_digest_runs(pool: &SqlitePool, digest_id: i64, limit: i64) -> Result<Vec<DigestRunRow>> {
+    Ok(sqlx::query_as::<_, DigestRunRow>(
+        r#"SELECT id, digest_id, digest_name, ran_at, finished_at, status,
+                  playlist_sc_id, playlist_url, track_count, pages_scanned, error
+           FROM digest_runs WHERE digest_id = ? ORDER BY ran_at DESC LIMIT ?"#,
+    )
+    .bind(digest_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn set_digest_enabled(pool: &SqlitePool, id: i64, enabled: bool) -> Result<()> {
+    sqlx::query("UPDATE digests SET enabled = ? WHERE id = ?")
+        .bind(enabled as i64)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub async fn delete_digest(pool: &SqlitePool, id: i64) -> Result<()> {

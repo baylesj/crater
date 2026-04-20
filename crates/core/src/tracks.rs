@@ -43,7 +43,7 @@ impl std::str::FromStr for TrackStatus {
 }
 
 /// A track row joined with its optional status. Returned by all query functions.
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
 pub struct StoredTrack {
     pub id:            i64,
     pub title:         Option<String>,

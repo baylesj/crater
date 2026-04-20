@@ -3,8 +3,7 @@ resolver = "2"
 members = [
     "crates/sc_client",
     "crates/core",
-    # Added in later sessions:
-    # "crates/server",
+    "crates/server",
 ]
 
 [workspace.package]

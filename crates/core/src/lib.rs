@@ -8,8 +8,10 @@
 //! depend on `crater-core`, not both.
 
 pub use sc_client;
+// Convenience re-exports so dependents don't need to depend on sc_client directly.
+pub use sc_client::{SearchFilters, Track};
 
-mod db;
+pub mod db;
 pub mod digest_runner;
 pub mod digests;
 pub mod error;
@@ -18,11 +20,13 @@ pub mod session;
 pub mod tracks;
 
 pub use digest_runner::{DigestRun, RunStatus};
-pub use digests::{Digest, DigestSpec, PlaylistVisibility};
+pub use digests::{Digest, DigestRunRow, DigestSpec, PlaylistVisibility};
 pub use error::{CoreError, Result};
 pub use filters::Ranking;
 pub use session::{Session, SessionBatch};
-pub use tracks::{StoredTrack, TrackStatus};
+pub use tracks::{
+    clear_status, get_track, set_status, tracks_with_status, upsert_track, StoredTrack, TrackStatus,
+};
 
 use std::path::PathBuf;
 use sqlx::SqlitePool;
@@ -112,6 +116,10 @@ impl Crater {
         digests::update_digest(&self.db, id, &spec).await
     }
 
+    pub async fn set_digest_enabled(&self, id: i64, enabled: bool) -> Result<()> {
+        digests::set_digest_enabled(&self.db, id, enabled).await
+    }
+
     pub async fn delete_digest(&self, id: i64) -> Result<()> {
         digests::delete_digest(&self.db, id).await
     }
@@ -120,5 +128,9 @@ impl Crater {
 
     pub async fn run_digest(&self, id: i64) -> Result<DigestRun> {
         digest_runner::run_digest(&self.db, &self.sc, id, self.oauth_token.as_deref()).await
+    }
+
+    pub async fn list_digest_runs(&self, digest_id: i64, limit: i64) -> Result<Vec<DigestRunRow>> {
+        digests::list_digest_runs(&self.db, digest_id, limit).await
     }
 }

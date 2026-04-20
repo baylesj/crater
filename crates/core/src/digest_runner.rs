@@ -14,7 +14,7 @@ use crate::tracks::{set_status, StoredTrack, TrackStatus};
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DigestRun {
     pub id:            i64,
     pub digest_id:     Option<i64>,
@@ -26,7 +26,8 @@ pub struct DigestRun {
     pub error:         Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RunStatus {
     Running,
     Success,
