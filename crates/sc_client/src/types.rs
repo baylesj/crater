@@ -70,6 +70,50 @@ pub struct Track {
     /// "allow" | "snip" | "blocked". We filter to "allow" when streaming.
     #[serde(default)]
     pub access: Option<String>,
+
+    /// Audio stream info. Present on search results; used to resolve the HLS
+    /// manifest URL for playback.
+    #[serde(default)]
+    pub media: Option<Media>,
+}
+
+/// Container for audio transcodings (encoding variants) for a track.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct Media {
+    #[serde(default)]
+    pub transcodings: Vec<Transcoding>,
+}
+
+/// A single audio encoding offered by SoundCloud (HLS opus, HLS mp3,
+/// progressive mp3, etc.).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Transcoding {
+    /// API endpoint URL — must be resolved with `client_id` to get the CDN
+    /// manifest URL. Not a direct CDN URL.
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub preset: Option<String>,
+    #[serde(default)]
+    pub duration: Option<u64>,
+    /// True when the track is only available as a 30-second snip (geo-blocked
+    /// or label-restricted). Snipped transcodings are skipped for playback.
+    #[serde(default)]
+    pub snipped: bool,
+    #[serde(default)]
+    pub format: Option<TranscodingFormat>,
+    #[serde(default)]
+    pub quality: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TranscodingFormat {
+    /// "hls" | "progressive"
+    #[serde(default)]
+    pub protocol: Option<String>,
+    /// e.g. `"audio/ogg; codecs=\"opus\""` or `"audio/mpeg"`
+    #[serde(default)]
+    pub mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -126,6 +170,33 @@ pub struct SearchFilters {
 
     /// Page size. v2 caps this around 50 in practice.
     pub limit: Option<u32>,
+}
+
+/// Pick the best HLS transcoding URL from a track's media field.
+///
+/// Preference order: HLS opus → HLS mp3. Progressive (non-HLS) and snipped
+/// transcodings are skipped. Returns the API endpoint URL (not a CDN URL —
+/// it must be resolved via `Client::resolve_stream_url`).
+pub fn pick_hls_transcoding(track: &Track) -> Option<&str> {
+    let transcodings = track.media.as_ref()?.transcodings.as_slice();
+    // Two passes: prefer opus first, fall back to mp3.
+    for prefer_opus in [true, false] {
+        for t in transcodings {
+            if t.snipped { continue; }
+            let protocol = t.format.as_ref().and_then(|f| f.protocol.as_deref());
+            if protocol != Some("hls") { continue; }
+            let is_opus = t.format.as_ref()
+                .and_then(|f| f.mime_type.as_deref())
+                .map(|m| m.contains("ogg") || m.contains("opus"))
+                .unwrap_or(false);
+            if prefer_opus == is_opus {
+                if let Some(url) = t.url.as_deref() {
+                    return Some(url);
+                }
+            }
+        }
+    }
+    None
 }
 
 impl Track {

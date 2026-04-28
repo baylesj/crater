@@ -2,6 +2,7 @@
 
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use crater_core::CoreError;
+use sc_client::ScError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -13,6 +14,7 @@ pub enum AppError {
     BadRequest(String),
 
     #[error("service unavailable: {0}")]
+    #[allow(dead_code)]
     ServiceUnavailable(String),
 
     #[error(transparent)]
@@ -31,6 +33,8 @@ impl IntoResponse for AppError {
             AppError::Core(CoreError::NotFound) => (StatusCode::NOT_FOUND,           "not_found"),
             AppError::Core(CoreError::InvalidCron { .. }) => (StatusCode::BAD_REQUEST, "invalid_cron"),
             AppError::Core(CoreError::InvalidRanking(_)) => (StatusCode::BAD_REQUEST, "invalid_ranking"),
+            AppError::Core(CoreError::Sc(ScError::AuthExpired)) => (StatusCode::BAD_GATEWAY, "sc_auth_expired"),
+            AppError::Core(CoreError::Sc(ScError::RateLimited)) => (StatusCode::TOO_MANY_REQUESTS, "sc_rate_limited"),
             _                                  => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
 

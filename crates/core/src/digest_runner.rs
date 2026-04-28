@@ -82,6 +82,23 @@ pub async fn run_digest(
     }
 }
 
+// ── Title template ────────────────────────────────────────────────────────────
+
+/// Expand a playlist title template with the current UTC date.
+///
+/// Supported tokens: `{name}` (digest name), `{date}` (YYYY-MM-DD),
+/// `{year}`, `{month}` (zero-padded), `{week}` (ISO week, zero-padded).
+fn render_title(tmpl: &str, digest_name: &str) -> String {
+    use chrono::Utc;
+    let now = Utc::now();
+    tmpl
+        .replace("{name}",  digest_name)
+        .replace("{date}",  &now.format("%Y-%m-%d").to_string())
+        .replace("{year}",  &now.format("%Y").to_string())
+        .replace("{month}", &now.format("%m").to_string())
+        .replace("{week}",  &now.format("%V").to_string())
+}
+
 // ── Inner implementation ──────────────────────────────────────────────────────
 
 async fn run_inner(
@@ -89,7 +106,7 @@ async fn run_inner(
     sc:          &sc_client::Client,
     digest:      &crate::digests::Digest,
     run_id:      i64,
-    _oauth_token: Option<&str>,
+    oauth_token: Option<&str>,
 ) -> Result<DigestRun> {
     let spec = &digest.spec;
 
@@ -105,14 +122,29 @@ async fn run_inner(
         .take(spec.target_size as usize)
         .collect();
 
-    // Step 5: playlist creation — not yet implemented (needs OAuth + sc_client::playlist)
-    // TODO: call sc_client::playlist::create once the OAuth capture flow is done.
-    let playlist_url:   Option<String> = None;
-    let playlist_sc_id: Option<i64>    = None;
+    // Step 5: create the SoundCloud playlist.
+    // Fail the run clearly if no OAuth token is configured — silent skips
+    // would leave users wondering why digests produce no output.
+    let title = render_title(&spec.playlist_title_tmpl, &spec.name);
+    let token = oauth_token.ok_or_else(|| crate::error::CoreError::Other(
+        anyhow::anyhow!(
+            "SoundCloud OAuth token not configured — save a token in Settings \
+             or set CRATER_SC_OAUTH_TOKEN"
+        )
+    ))?;
+    let sc_ids: Vec<u64> = selected.iter().map(|t| t.id as u64).collect();
+    let playlist = sc
+        .create_playlist(token, &title, spec.playlist_visibility.as_str(), &sc_ids)
+        .await
+        .map_err(crate::error::CoreError::Sc)?;
+
+    let playlist_url   = playlist.permalink_url.clone();
+    let playlist_sc_id = Some(playlist.id as i64);
     tracing::info!(
-        digest = %spec.name,
-        tracks = selected.len(),
-        "playlist export skipped — OAuth not yet implemented"
+        digest  = %spec.name,
+        tracks  = selected.len(),
+        url     = ?playlist_url,
+        "playlist created"
     );
 
     // Step 6: mark tracks as exported

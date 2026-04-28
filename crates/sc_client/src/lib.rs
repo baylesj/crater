@@ -13,9 +13,6 @@
 //! ## Does not (yet)
 //! - Playlist CRUD — needs a user OAuth token, which requires a manual
 //!   auth step. Will live in a separate `playlist` module in a later pass.
-//! - Streaming URL resolution — the v2 `/tracks/:id/streams` endpoint
-//!   requires authentication and returns HLS manifests; deferred until
-//!   we have the audio-preview UI ready to consume them.
 //! - Writes of any kind.
 //!
 //! ## Ethical scope
@@ -27,9 +24,16 @@
 mod client;
 mod client_id;
 mod error;
+pub mod oauth;
+pub mod playlist;
 mod types;
 
 pub use client::Client;
 pub use client_id::extract_client_id;
 pub use error::{Result, ScError};
-pub use types::{SearchFilters, SearchResponse, Track, User};
+pub use oauth::{OAuthConfig, TokenResponse};
+pub use playlist::CreatedPlaylist;
+pub use types::{
+    pick_hls_transcoding, Media, SearchFilters, SearchResponse, Track,
+    Transcoding, TranscodingFormat, User,
+};

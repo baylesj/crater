@@ -32,7 +32,7 @@ pub async fn handler(
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ClientMsg {
     Subscribe   { channel: String, session_id: Option<Uuid> },
-    Unsubscribe { channel: String, session_id: Option<Uuid> },
+    Unsubscribe { channel: String, #[allow(dead_code)] session_id: Option<Uuid> },
     Ping,
 }
 

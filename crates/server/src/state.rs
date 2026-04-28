@@ -16,6 +16,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crater_core::{Crater, StoredTrack};
+use crate::config::Config;
 
 const SESSION_TTL: Duration = Duration::from_secs(5 * 60);
 const EVENT_BUF:   usize    = 256;
@@ -28,15 +29,18 @@ pub struct AppState {
     pub sessions:      Arc<RwLock<HashMap<Uuid, SessionEntry>>>,
     /// Broadcast channel for digest run lifecycle events.
     pub digest_events: broadcast::Sender<DigestEvent>,
+    /// Server config — needed by auth middleware and OAuth routes.
+    pub config:        Config,
 }
 
 impl AppState {
-    pub fn new(crater: Crater) -> SharedState {
+    pub fn new(crater: Crater, config: Config) -> SharedState {
         let (digest_events, _) = broadcast::channel(DIGEST_BUF);
         Arc::new(Self {
             crater:        Arc::new(crater),
             sessions:      Arc::new(RwLock::new(HashMap::new())),
             digest_events,
+            config,
         })
     }
 }
@@ -106,6 +110,11 @@ pub enum SearchEvent {
         session_id:     Uuid,
         exhausted:      bool,
         total_accepted: usize,
+        /// Tracks that passed client-side filters across all pages scanned.
+        /// Sent in Complete so the client has final counts even when 0 tracks
+        /// were accepted (no Track events were emitted to carry the counts).
+        total_scanned:  u32,
+        pages_scanned:  u32,
     },
     /// Search failed.
     #[serde(rename = "search.error")]

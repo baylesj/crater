@@ -94,6 +94,8 @@ pub async fn start(
                         session_id,
                         exhausted:      batch.exhausted,
                         total_accepted,
+                        total_scanned:  batch.total_scanned,
+                        pages_scanned:  batch.pages_scanned,
                     });
                 });
             }

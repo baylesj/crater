@@ -7,12 +7,26 @@ license.workspace = true
 repository.workspace = true
 description     = "Self-hosted SoundCloud crate-digging tool"
 
+[lib]
+name = "crater_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "crater"
 path = "src/main.rs"
 
+[features]
+live-tests = []
+
+[[test]]
+name = "live"
+path = "tests/live.rs"
+required-features = ["live-tests"]
+
 [dependencies]
 crater-core         = { path = "../core" }
+sc_client           = { path = "../sc_client" }
+reqwest             = { version = "0.12", features = ["json"] }
 axum                = { version = "0.8", features = ["ws", "macros"] }
 tokio               = { workspace = true }
 tower-http          = { version = "0.6", features = ["trace", "cors", "compression-gzip"] }
@@ -27,3 +41,11 @@ uuid                = { version = "1",   features = ["v4", "serde"] }
 tokio-cron-scheduler = "0.13"
 futures-util        = "0.3"
 chrono              = { version = "0.4", features = ["serde"] }
+tower-sessions      = { version = "0.14", features = ["memory-store"] }
+sha2                = "0.10"
+base64              = "0.22"
+rand                = "0.8"
+
+[dev-dependencies]
+tempfile            = "3"
+tokio-tungstenite   = "0.24"

@@ -14,83 +14,147 @@ use tokio::sync::RwLock;
 
 use crate::client_id::extract_client_id;
 use crate::error::{Result, ScError};
+use crate::oauth::{client_credentials, CachedToken, OAuthConfig};
 use crate::types::{SearchFilters, SearchResponse, Track};
 
 const API_BASE: &str = "https://api-v2.soundcloud.com";
+
+/// Response from a transcoding resolution request: `{"url": "<cdn_url>"}`.
+#[derive(serde::Deserialize)]
+struct StreamUrlResponse {
+    url: String,
+}
 
 /// Default page size for v2 search. The server caps at ~50 regardless of
 /// what we ask for, so we use 50 to minimize round trips.
 const DEFAULT_LIMIT: u32 = 50;
 
-/// A SoundCloud v2 API client with automatic `client_id` management.
+/// A SoundCloud v2 API client with automatic credential management.
 ///
-/// Cheap to clone — the underlying `reqwest::Client` is already an `Arc`
-/// and the `client_id` cache is behind an `Arc<RwLock<_>>`.
+/// Supports two auth modes:
+/// - **Official**: uses `client_id` + `client_secret` for client credentials
+///   tokens. Tokens auto-refresh when expired. No scraping required.
+/// - **Scrape fallback**: extracts `client_id` from SoundCloud's homepage JS
+///   bundles. Used when official credentials aren't configured.
+///
+/// Cheap to clone — the underlying `reqwest::Client` and all caches are
+/// behind `Arc`.
 #[derive(Clone)]
 pub struct Client {
-    http: reqwest::Client,
-    /// Cached client_id, refreshed on 401. `None` until first use.
+    http:      reqwest::Client,
+    /// Official API credentials, if configured.
+    oauth_cfg: Option<Arc<OAuthConfig>>,
+    /// Client credentials token (official flow). `None` until first use or
+    /// when using scrape fallback.
+    cc_token:  Arc<RwLock<Option<CachedToken>>>,
+    /// Scraped client_id (fallback). `None` until first use when no official
+    /// credentials are configured.
     client_id: Arc<RwLock<Option<String>>>,
 }
 
 impl Client {
-    /// Build a new client. The `client_id` is lazily scraped on first
-    /// request rather than eagerly at construction — this lets callers
-    /// construct the client offline (e.g. at server boot) without a
-    /// network round trip.
-    pub fn new() -> Result<Self> {
-        let http = reqwest::Client::builder()
+    fn build_http() -> Result<reqwest::Client> {
+        reqwest::Client::builder()
             .user_agent(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
                  AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             )
             .timeout(std::time::Duration::from_secs(30))
-            .build()?;
+            .build()
+            .map_err(Into::into)
+    }
 
+    /// Build a client using the official API credentials (preferred).
+    /// Tokens are obtained via client credentials flow, lazily on first use.
+    pub fn with_oauth(oauth_cfg: OAuthConfig) -> Result<Self> {
         Ok(Self {
-            http,
+            http:      Self::build_http()?,
+            oauth_cfg: Some(Arc::new(oauth_cfg)),
+            cc_token:  Arc::new(RwLock::new(None)),
             client_id: Arc::new(RwLock::new(None)),
         })
     }
 
-    /// Build a client with a pre-known `client_id` (e.g. loaded from disk
-    /// cache). Skips the initial scrape on the first request.
+    /// Build a client using the scrape fallback (no official credentials).
+    /// The `client_id` is lazily scraped from SoundCloud's homepage JS.
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            http:      Self::build_http()?,
+            oauth_cfg: None,
+            cc_token:  Arc::new(RwLock::new(None)),
+            client_id: Arc::new(RwLock::new(None)),
+        })
+    }
+
+    /// Build a scrape-fallback client with a pre-known `client_id`.
     pub fn with_client_id(client_id: String) -> Result<Self> {
         let me = Self::new()?;
-        // Blocking on a held lock is fine — we just constructed the Arc
-        // and nothing else can have a reference.
         *me.client_id.try_write().expect("fresh Arc") = Some(client_id);
         Ok(me)
     }
 
-    /// Returns the current cached client_id, scraping if necessary.
+    /// Returns a valid `client_id` (official mode) or scraped id (fallback),
+    /// refreshing/scraping as needed. This is what all API calls use for the
+    /// `client_id=` query parameter.
     async fn get_client_id(&self) -> Result<String> {
-        // Fast path: already cached.
+        if let Some(cfg) = &self.oauth_cfg {
+            // Official mode: use/refresh the client credentials token.
+            return self.get_cc_token(cfg).await;
+        }
+        // Scrape fallback.
         if let Some(id) = self.client_id.read().await.as_ref() {
             return Ok(id.clone());
         }
-        // Slow path: scrape. We take the write lock for the whole duration
-        // so concurrent callers don't trigger duplicate scrapes.
         let mut guard = self.client_id.write().await;
         if let Some(id) = guard.as_ref() {
-            return Ok(id.clone()); // someone else won the race
+            return Ok(id.clone());
         }
         let fresh = extract_client_id(&self.http).await?;
         *guard = Some(fresh.clone());
         Ok(fresh)
     }
 
-    /// Force a refresh of the cached client_id. Called automatically when
-    /// a request returns 401, but exposed for manual use.
+    /// Get a valid client credentials access token, fetching or refreshing
+    /// as needed.
+    async fn get_cc_token(&self, cfg: &OAuthConfig) -> Result<String> {
+        // Fast path: valid cached token.
+        if let Some(t) = self.cc_token.read().await.as_ref() {
+            if !t.is_expired() {
+                return Ok(t.access_token.clone());
+            }
+        }
+        // Slow path: fetch new token. Hold write lock to avoid thundering herd.
+        let mut guard = self.cc_token.write().await;
+        if let Some(t) = guard.as_ref() {
+            if !t.is_expired() {
+                return Ok(t.access_token.clone());
+            }
+        }
+        tracing::info!("fetching client credentials token from SoundCloud");
+        let resp  = client_credentials(&self.http, cfg).await?;
+        let token = CachedToken::from_response(resp);
+        let id    = token.access_token.clone();
+        *guard    = Some(token);
+        Ok(id)
+    }
+
+    /// Force a refresh. In official mode refreshes the CC token; in scrape
+    /// mode re-scrapes the homepage. Called automatically on 401.
     pub async fn refresh_client_id(&self) -> Result<String> {
+        if let Some(cfg) = &self.oauth_cfg {
+            *self.cc_token.write().await = None; // force re-fetch
+            return self.get_cc_token(cfg).await;
+        }
         let fresh = extract_client_id(&self.http).await?;
         *self.client_id.write().await = Some(fresh.clone());
         Ok(fresh)
     }
 
-    /// Returns the currently cached client_id without scraping. Useful for
-    /// persisting across restarts (e.g. write to disk on shutdown).
+    /// Returns the currently cached client_id/token without making requests.
     pub async fn current_client_id(&self) -> Option<String> {
+        if self.oauth_cfg.is_some() {
+            return self.cc_token.read().await.as_ref().map(|t| t.access_token.clone());
+        }
         self.client_id.read().await.clone()
     }
 
@@ -167,6 +231,61 @@ impl Client {
         Ok(accumulated)
     }
 
+    /// Resolve a SoundCloud transcoding API URL to the actual CDN manifest URL.
+    ///
+    /// The transcoding URL (from `Track.media.transcodings[].url`) is an API
+    /// endpoint that requires `client_id`. It returns `{"url": "<cdn_url>"}`.
+    /// The CDN URL is a signed HLS manifest URL on `cf-hls-media.sndcdn.com`.
+    pub async fn resolve_stream_url(&self, transcoding_api_url: &str) -> Result<String> {
+        let client_id  = self.get_client_id().await?;
+        let url        = format!("{transcoding_api_url}?client_id={client_id}");
+        let response   = self.get_json::<StreamUrlResponse>(&url).await?;
+        Ok(response.url)
+    }
+
+    /// Fetch a single track by its SoundCloud ID.
+    ///
+    /// Used when the track's `raw_json` was stored before the `media` field
+    /// was added to the schema and therefore lacks transcoding info.
+    pub async fn fetch_track(&self, track_id: u64) -> Result<Track> {
+        let client_id = self.get_client_id().await?;
+        let url       = format!("{API_BASE}/tracks/{track_id}?client_id={client_id}");
+        self.get_json::<Track>(&url).await
+    }
+
+    /// Create a SoundCloud playlist owned by the authenticated user.
+    ///
+    /// `sharing` is `"private"` or `"public"`. Track IDs are in desired
+    /// playback order. Requires a user OAuth token; the `client_id` is
+    /// resolved automatically (same as all other API calls).
+    pub async fn create_playlist(
+        &self,
+        oauth_token: &str,
+        title:       &str,
+        sharing:     &str,
+        track_ids:   &[u64],
+    ) -> Result<crate::playlist::CreatedPlaylist> {
+        let client_id = self.get_client_id().await?;
+        crate::playlist::create(&self.http, oauth_token, &client_id, title, sharing, track_ids).await
+    }
+
+    /// Fetch raw bytes from a URL without authentication.
+    ///
+    /// Used by the server to proxy HLS segment bytes from the CDN. CDN URLs
+    /// are pre-signed and do not require `client_id`.
+    pub async fn fetch_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        let resp = self.http.get(url).send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body   = resp.text().await.unwrap_or_default();
+            return Err(ScError::Unexpected {
+                status,
+                body: body.chars().take(200).collect(),
+            });
+        }
+        Ok(resp.bytes().await?.to_vec())
+    }
+
     /// Perform a GET and deserialize as JSON, with automatic retry once on
     /// 401 (refresh client_id and try again). Other errors bubble up.
     async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
@@ -213,9 +332,9 @@ fn build_search_url(client_id: &str, f: &SearchFilters) -> String {
     // Use a simple query builder rather than pulling in a dep.
     let mut params: Vec<(&str, String)> = Vec::new();
 
-    if let Some(q) = &f.query {
-        params.push(("q", q.clone()));
-    }
+    // `q` is required by the v2 API even when filtering by genre/BPM only.
+    // Use "*" as a wildcard when the caller didn't specify a text query.
+    params.push(("q", f.query.clone().unwrap_or_else(|| "*".to_owned())));
     if let Some(g) = &f.genre_or_tag {
         params.push(("filter.genre_or_tag", g.clone()));
     }
@@ -303,6 +422,17 @@ mod tests {
         // max_plays is client-side only:
         assert!(!url.contains("max_plays"));
         assert!(!url.contains("playback_count"));
+    }
+
+    #[test]
+    fn search_url_uses_wildcard_when_no_query() {
+        let f = SearchFilters {
+            genre_or_tag: Some("jungle".into()),
+            ..Default::default()
+        };
+        let url = build_search_url("cid", &f);
+        // Must always include q= so SC doesn't return 400.
+        assert!(url.contains("q=%2A") || url.contains("q=*"), "q param missing: {url}");
     }
 
     #[test]

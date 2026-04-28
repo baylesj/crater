@@ -22,6 +22,7 @@ pub async fn digest_detail_page(
     Html(DIGEST_DETAIL.replace("/* CSS_PLACEHOLDER */", CSS).replace("DIGEST_ID_PLACEHOLDER", &id.to_string()))
 }
 pub async fn history_page()      -> Html<String> { Html(HISTORY.replace("/* CSS_PLACEHOLDER */", CSS)) }
+pub async fn settings_page()    -> Html<String> { Html(SETTINGS.replace("/* CSS_PLACEHOLDER */", CSS)) }
 
 // ── Shared CSS ────────────────────────────────────────────────────────────────
 //
@@ -29,10 +30,11 @@ pub async fn history_page()      -> Html<String> { Html(HISTORY.replace("/* CSS_
 
 const CSS: &str = r##"
 :root {
-  --bg-0: #0f1013; --bg-1: #171920; --bg-2: #1f222b;
+  --bg-0: #0f1013; --bg-1: #171920; --bg-2: #1f222b; --bg-3: #2a2e38;
   --fg-0: #e8ebf0; --fg-1: #a0a6b0; --fg-2: #5c6370;
   --accent: #c9ad7f;
   --queued: #7fb383;
+  --green:  #7fb383;
   --danger: #c06970;
   --bpm:    #7fa3b3;
   --sel:    #252830;
@@ -412,8 +414,103 @@ const DIG: &str = r##"<!DOCTYPE html>
     </div>
     <div class="filter-group">
       <div class="filter-label">genre / tag</div>
-      <input id="f-genre" type="text" placeholder="drum &amp; bass">
+      <input id="f-genre" type="text" placeholder="drum &amp; bass" list="genre-suggestions">
     </div>
+    <datalist id="genre-suggestions">
+      <!-- drum & bass family -->
+      <option value="drum &amp; bass">
+      <option value="liquid drum &amp; bass">
+      <option value="neurofunk">
+      <option value="darkstep">
+      <option value="techstep">
+      <option value="jump up">
+      <option value="jungle">
+      <!-- bass / experimental / left field -->
+      <option value="bass">
+      <option value="bass music">
+      <option value="experimental bass">
+      <option value="left field">
+      <option value="halftime">
+      <!-- dubstep / future bass -->
+      <option value="dubstep">
+      <option value="brostep">
+      <option value="future bass">
+      <option value="wave">
+      <!-- house -->
+      <option value="house">
+      <option value="deep house">
+      <option value="tech house">
+      <option value="progressive house">
+      <!-- techno / trance -->
+      <option value="techno">
+      <option value="trance">
+      <option value="progressive trance">
+      <!-- broad electronic -->
+      <option value="electronic">
+      <option value="electronica">
+      <option value="dance &amp; EDM">
+      <!-- uk dance -->
+      <option value="uk garage">
+      <option value="garage">
+      <option value="grime">
+      <option value="uk dance">
+      <!-- breakbeat / footwork -->
+      <option value="breaks">
+      <option value="breakbeat">
+      <option value="footwork">
+      <option value="juke">
+      <option value="jersey club">
+      <!-- hardcore -->
+      <option value="hardcore">
+      <option value="hardstyle">
+      <!-- synth / wave -->
+      <option value="synthwave">
+      <option value="vaporwave">
+      <option value="darkwave">
+      <!-- experimental / IDM -->
+      <option value="IDM">
+      <option value="glitch">
+      <option value="glitch hop">
+      <option value="experimental">
+      <option value="ambient">
+      <option value="drone">
+      <!-- downtempo -->
+      <option value="downtempo">
+      <option value="lo-fi">
+      <option value="trip hop">
+      <!-- hip-hop / trap -->
+      <option value="hip hop &amp; rap">
+      <option value="hip hop">
+      <option value="trap">
+      <option value="drill">
+      <option value="phonk">
+      <!-- global / afrobeats -->
+      <option value="afrobeats">
+      <option value="dancehall">
+      <option value="reggaeton">
+      <option value="reggae">
+      <option value="dub">
+      <!-- soul / jazz -->
+      <option value="r&amp;b &amp; soul">
+      <option value="jazz &amp; blues">
+      <option value="disco">
+      <!-- rock / indie -->
+      <option value="indie">
+      <option value="alternative rock">
+      <option value="folk &amp; singer-songwriter">
+      <option value="rock">
+      <option value="metal">
+      <!-- pop / mainstream -->
+      <option value="pop">
+      <!-- classical / cinematic -->
+      <option value="classical">
+      <option value="piano">
+      <option value="soundtrack">
+      <!-- country / world -->
+      <option value="country">
+      <option value="latin">
+      <option value="world">
+    </datalist>
     <div class="filter-group">
       <div class="filter-label">BPM</div>
       <div class="filter-pair">
@@ -601,10 +698,25 @@ function onTrack({track, total_scanned, pages_scanned}) {
     `${tracks.length} accepted · ${totalScanned} scanned · ${pagesScanned} pages`;
 }
 
-function onComplete({exhausted, total_accepted}) {
+function onComplete({exhausted, total_accepted, total_scanned, pages_scanned}) {
   searching = false;
-  const more = exhausted ? 'exhausted' : 'more available';
-  setStatus(`${total_accepted} tracks · ${more}`);
+  // Update final counts — only reach the client via Track events when tracks
+  // are emitted; pick up the definitive numbers from Complete instead.
+  if (total_scanned != null) totalScanned = total_scanned;
+  if (pages_scanned != null) pagesScanned = pages_scanned;
+
+  if (total_accepted === 0) {
+    if (pagesScanned === 0) {
+      setStatus('0 tracks — no pages fetched (check genre / tag spelling)');
+    } else if (totalScanned === 0) {
+      setStatus(`0 tracks · ${pagesScanned} pages scanned · nothing passed filters — try loosening max plays or BPM range`);
+    } else {
+      setStatus(`0 tracks shown · ${totalScanned} filtered · ${pagesScanned} pages`);
+    }
+  } else {
+    const more = exhausted ? 'exhausted' : 'more available';
+    setStatus(`${total_accepted} tracks · ${more}`);
+  }
   refreshQueueCount();
 }
 
@@ -1184,6 +1296,102 @@ const DIGEST_DETAIL: &str = r##"<!DOCTYPE html>
   </div>
 </div>
 
+<datalist id="genre-suggestions">
+  <!-- drum & bass family -->
+  <option value="drum &amp; bass">
+  <option value="liquid drum &amp; bass">
+  <option value="neurofunk">
+  <option value="darkstep">
+  <option value="techstep">
+  <option value="jump up">
+  <option value="jungle">
+  <!-- bass / experimental / left field -->
+  <option value="bass">
+  <option value="bass music">
+  <option value="experimental bass">
+  <option value="left field">
+  <option value="halftime">
+  <!-- dubstep / future bass -->
+  <option value="dubstep">
+  <option value="brostep">
+  <option value="future bass">
+  <option value="wave">
+  <!-- house -->
+  <option value="house">
+  <option value="deep house">
+  <option value="tech house">
+  <option value="progressive house">
+  <!-- techno / trance -->
+  <option value="techno">
+  <option value="trance">
+  <option value="progressive trance">
+  <!-- broad electronic -->
+  <option value="electronic">
+  <option value="electronica">
+  <option value="dance &amp; EDM">
+  <!-- uk dance -->
+  <option value="uk garage">
+  <option value="garage">
+  <option value="grime">
+  <option value="uk dance">
+  <!-- breakbeat / footwork -->
+  <option value="breaks">
+  <option value="breakbeat">
+  <option value="footwork">
+  <option value="juke">
+  <option value="jersey club">
+  <!-- hardcore -->
+  <option value="hardcore">
+  <option value="hardstyle">
+  <!-- synth / wave -->
+  <option value="synthwave">
+  <option value="vaporwave">
+  <option value="darkwave">
+  <!-- experimental / IDM -->
+  <option value="IDM">
+  <option value="glitch">
+  <option value="glitch hop">
+  <option value="experimental">
+  <option value="ambient">
+  <option value="drone">
+  <!-- downtempo -->
+  <option value="downtempo">
+  <option value="lo-fi">
+  <option value="trip hop">
+  <!-- hip-hop / trap -->
+  <option value="hip hop &amp; rap">
+  <option value="hip hop">
+  <option value="trap">
+  <option value="drill">
+  <option value="phonk">
+  <!-- global / afrobeats -->
+  <option value="afrobeats">
+  <option value="dancehall">
+  <option value="reggaeton">
+  <option value="reggae">
+  <option value="dub">
+  <!-- soul / jazz -->
+  <option value="r&amp;b &amp; soul">
+  <option value="jazz &amp; blues">
+  <option value="disco">
+  <!-- rock / indie -->
+  <option value="indie">
+  <option value="alternative rock">
+  <option value="folk &amp; singer-songwriter">
+  <option value="rock">
+  <option value="metal">
+  <!-- pop / mainstream -->
+  <option value="pop">
+  <!-- classical / cinematic -->
+  <option value="classical">
+  <option value="piano">
+  <option value="soundtrack">
+  <!-- country / world -->
+  <option value="country">
+  <option value="latin">
+  <option value="world">
+</datalist>
+
 <script>
 'use strict';
 const DIGEST_ID = DIGEST_ID_PLACEHOLDER;
@@ -1215,7 +1423,7 @@ function render(d, runs) {
           </div>
           <div class="filter-group" style="margin-bottom:8px">
             <div class="filter-label">genre / tag</div>
-            <input id="d-genre" type="text" value="${esc(f.genre_or_tag||'')}">
+            <input id="d-genre" type="text" value="${esc(f.genre_or_tag||'')}" list="genre-suggestions">
           </div>
           <div class="filter-group" style="margin-bottom:8px">
             <div class="filter-label">BPM</div>
@@ -1454,6 +1662,127 @@ function esc(s) {
 }
 
 load();
+</script>
+</body>
+</html>"##;
+
+// ── Settings page ─────────────────────────────────────────────────────────────
+
+pub const SETTINGS: &str = r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>crater — settings</title>
+<style>/* CSS_PLACEHOLDER */</style>
+</head>
+<body>
+<header>
+  <span class="logo">crater</span>
+  <nav>
+    <a href="/dig">dig</a>
+    <a href="/queue">queue</a>
+    <a href="/digests">digests</a>
+    <a href="/history">history</a>
+    <a href="/settings" class="active">settings</a>
+  </nav>
+</header>
+<div class="page-layout">
+
+<section style="margin-bottom:32px">
+  <h2 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:16px">soundcloud account</h2>
+  <div id="sc-status" style="margin-bottom:16px;font-size:13px;color:var(--fg-2)">checking connection…</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="/auth/soundcloud"
+       style="display:inline-block;padding:7px 14px;background:var(--accent);color:var(--bg-0);border-radius:3px;font-size:13px;font-weight:600;text-decoration:none">
+      connect via oauth
+    </a>
+  </div>
+
+  <div style="margin-top:24px">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:8px">manual token</div>
+    <div style="font-size:12px;color:var(--fg-2);margin-bottom:8px">paste the <code>Authorization</code> header value from devtools (with or without the "OAuth " prefix)</div>
+    <div style="display:flex;gap:8px">
+      <input id="token-input" type="password" placeholder="OAuth 2-…"
+             style="flex:1;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--fg-0);padding:7px 10px;border-radius:3px;font-size:13px;font-family:monospace">
+      <button onclick="saveToken()" style="padding:7px 14px;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--fg-0);border-radius:3px;font-size:13px;cursor:pointer">save</button>
+      <button onclick="testToken()" style="padding:7px 14px;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--fg-0);border-radius:3px;font-size:13px;cursor:pointer">test</button>
+    </div>
+    <div id="token-msg" style="margin-top:8px;font-size:12px"></div>
+  </div>
+</section>
+
+<section style="margin-bottom:32px">
+  <h2 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:16px">session</h2>
+  <form method="post" action="/logout">
+    <button type="submit"
+            style="padding:7px 14px;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--danger);border-radius:3px;font-size:13px;cursor:pointer">
+      log out
+    </button>
+  </form>
+</section>
+
+</div>
+<script>
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/settings/sc-token/test');
+    const j = await r.json();
+    const el = document.getElementById('sc-status');
+    if (r.ok && j.status === 'ok') {
+      el.innerHTML = `connected as <strong style="color:var(--fg-0)">${esc(j.username)}</strong>`;
+      el.style.color = 'var(--green)';
+    } else {
+      el.textContent = j.error || 'not connected';
+      el.style.color = 'var(--fg-2)';
+    }
+  } catch {
+    document.getElementById('sc-status').textContent = 'could not reach server';
+  }
+}
+
+async function saveToken() {
+  const token = document.getElementById('token-input').value.trim();
+  const msg = document.getElementById('token-msg');
+  if (!token) { msg.textContent = 'enter a token first'; msg.style.color = 'var(--danger)'; return; }
+  const r = await fetch('/api/settings/sc-token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token}),
+  });
+  const j = await r.json();
+  if (r.ok) {
+    msg.textContent = 'saved';
+    msg.style.color = 'var(--green)';
+    checkStatus();
+  } else {
+    msg.textContent = j.error || 'save failed';
+    msg.style.color = 'var(--danger)';
+  }
+}
+
+async function testToken() {
+  const msg = document.getElementById('token-msg');
+  msg.textContent = 'testing…';
+  msg.style.color = 'var(--fg-2)';
+  const r = await fetch('/api/settings/sc-token/test');
+  const j = await r.json();
+  if (r.ok && j.status === 'ok') {
+    msg.textContent = `ok — logged in as ${esc(j.username)}`;
+    msg.style.color = 'var(--green)';
+  } else {
+    msg.textContent = j.error || 'test failed';
+    msg.style.color = 'var(--danger)';
+  }
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = typeof s === 'string' ? s : String(s ?? '');
+  return d.innerHTML;
+}
+
+checkStatus();
 </script>
 </body>
 </html>"##;

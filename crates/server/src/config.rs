@@ -22,12 +22,38 @@ pub struct Config {
     #[arg(long, env = "CRATER_MUSIC_DIR")]
     pub music_dir: Option<PathBuf>,
 
-    /// SoundCloud OAuth token for playlist exports.
-    /// Without this, read operations work but export fails.
+    // ── SoundCloud official API credentials ───────────────────────────────
+    // Obtained from https://soundcloud.com/you/apps after API approval.
+    // If absent, sc_client falls back to scraping a client_id from the
+    // SoundCloud homepage (the old unofficial path).
+
+    #[arg(long, env = "CRATER_SC_CLIENT_ID", hide_env_values = true)]
+    pub sc_client_id: Option<String>,
+
+    #[arg(long, env = "CRATER_SC_CLIENT_SECRET", hide_env_values = true)]
+    pub sc_client_secret: Option<String>,
+
+    /// Redirect URI registered in the SoundCloud developer portal.
+    /// Must match exactly. Example: http://localhost:8080/auth/soundcloud/callback
+    #[arg(long, env = "CRATER_REDIRECT_URI")]
+    pub sc_redirect_uri: Option<String>,
+
+    /// Fallback: manually captured OAuth token (see docs/04-oauth-capture.md).
+    /// Used for playlist export if the PKCE flow hasn't been completed.
     #[arg(long, env = "CRATER_SC_OAUTH_TOKEN", hide_env_values = true)]
     pub sc_oauth_token: Option<String>,
 
-    /// ntfy push notification URL (e.g. http://unraid.local:8090).
+    // ── Crater app password ───────────────────────────────────────────────
+    // If set, all pages require a login. Suitable for exposing crater
+    // beyond the LAN (behind a reverse proxy). If unset, no auth — rely
+    // on network-level access control.
+
+    /// Password to protect the crater web UI. If unset, no login required.
+    #[arg(long, env = "CRATER_PASSWORD", hide_env_values = true)]
+    pub password: Option<String>,
+
+    // ── Notifications ─────────────────────────────────────────────────────
+
     #[arg(long, env = "CRATER_NTFY_URL")]
     pub ntfy_url: Option<String>,
 

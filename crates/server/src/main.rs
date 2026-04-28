@@ -4,22 +4,13 @@
 //! server. On SIGTERM/SIGINT: drains in-flight requests and exits cleanly.
 
 use clap::Parser;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
-
-mod config;
-mod error;
-mod routes;
-mod scheduler;
-mod state;
-
-use config::Config;
-use state::AppState;
+use crater_server::{build_router, config::Config, scheduler, state::AppState};
+use sc_client::OAuthConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cfg = Config::parse();
 
-    // Logging
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -29,25 +20,39 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(bind = %cfg.bind, data_dir = %cfg.data_dir.display(), "starting crater");
 
-    // ── Core facade ───────────────────────────────────────────────────────────
+    if cfg.sc_client_id.is_some() {
+        tracing::info!("using official SoundCloud API credentials");
+    } else {
+        tracing::warn!("CRATER_SC_CLIENT_ID not set — falling back to client_id scrape");
+    }
+
+    if cfg.password.is_some() {
+        tracing::info!("crater password auth enabled");
+    }
+
+    let sc_oauth_cfg = match (&cfg.sc_client_id, &cfg.sc_client_secret, &cfg.sc_redirect_uri) {
+        (Some(id), Some(secret), Some(redirect)) => Some(OAuthConfig {
+            client_id:     id.clone(),
+            client_secret: secret.clone(),
+            redirect_uri:  redirect.clone(),
+        }),
+        _ => None,
+    };
+
     let crater = crater_core::Crater::new(crater_core::Config {
         data_dir:         cfg.data_dir.clone(),
+        sc_oauth_cfg,
         sc_oauth_token:   cfg.sc_oauth_token.clone(),
         cached_client_id: None,
     })
     .await?;
 
-    let state = AppState::new(crater);
+    let state = AppState::new(crater, cfg.clone());
 
-    // ── Scheduler ─────────────────────────────────────────────────────────────
     let _sched = scheduler::start(state.clone()).await?;
 
-    // ── HTTP router ───────────────────────────────────────────────────────────
-    let app = routes::router(state)
-        .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive()); // LAN-only; tighten for public deploy
+    let app = build_router(state);
 
-    // ── Serve ─────────────────────────────────────────────────────────────────
     let listener = tokio::net::TcpListener::bind(cfg.bind).await?;
     tracing::info!("listening on http://{}", cfg.bind);
 

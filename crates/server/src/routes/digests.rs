@@ -55,11 +55,12 @@ pub async fn create(
 
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
-enum PatchDigest {
+pub(super) enum PatchDigest {
     EnabledOnly { enabled: bool },
     FullSpec(DigestSpec),
 }
 
+#[allow(private_interfaces)]
 pub async fn update(
     State(state): State<SharedState>,
     Path(id): Path<i64>,

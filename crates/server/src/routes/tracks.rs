@@ -60,6 +60,10 @@ pub async fn set_status(
     Path(id): Path<i64>,
     Json(req): Json<SetStatusRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // Guard before touching track_status so FK violations become clean 404s.
+    if state.crater.get_track(id).await?.is_none() {
+        return Err(AppError::NotFound);
+    }
     match req.status {
         None => {
             state.crater.clear_status(id).await?;
