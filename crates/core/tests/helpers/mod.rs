@@ -28,6 +28,7 @@ pub fn make_track(id: u64, title: &str, plays: u64, likes: u64) -> sc_client::Tr
         comment_count:  None,
         created_at:     None,
         user:           None,
+        artwork_url:    None,
         access:         None,
         media:          None,
     }

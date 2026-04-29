@@ -146,6 +146,19 @@ pub struct SearchResponse {
     pub total_results: Option<u64>,
 }
 
+/// Result ordering for v2 search. SC supports `order=created_at` which
+/// surfaces newer uploads first — far better hit rate when filtering by
+/// low play counts, since fresh tracks haven't had time to accumulate plays.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    /// SC default — relevance-ranked, biases toward popular tracks.
+    #[default]
+    Relevance,
+    /// Newest-first. Dramatically improves yield when `max_plays` is low.
+    CreatedAt,
+}
+
 /// Filters we support at search time. Fields map to v2 query params where
 /// possible; play-count filtering is client-side since v2 doesn't expose it.
 ///
@@ -177,6 +190,11 @@ pub struct SearchFilters {
 
     /// Page size. v2 caps this around 50 in practice.
     pub limit: Option<u32>,
+
+    /// Result ordering. Defaults to relevance; use `CreatedAt` for niche
+    /// genres with a low `max_plays` ceiling.
+    #[serde(default)]
+    pub sort_by: SortBy,
 }
 
 /// Pick the best HLS transcoding URL from a track's media field.

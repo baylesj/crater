@@ -95,6 +95,7 @@ mod tests {
             permalink_url: String::new(),
             duration_ms: None, bpm: None, genre: None, tag_list: None,
             reposts_count: None, comment_count: None, created_at_sc: None,
+            artwork_url: None,
             first_seen: chrono::Utc::now(),
             last_seen:  chrono::Utc::now(),
             raw_json: None, status: None, status_note: None,

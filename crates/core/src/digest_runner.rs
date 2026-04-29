@@ -113,7 +113,7 @@ async fn run_inner(
     // Step 3: search via Session
     let mut session = Session::new(spec.filters.clone(), pool.clone(), sc.clone());
     let batch = session
-        .next_batch(spec.target_size as usize, spec.max_pages)
+        .next_batch(spec.target_size as usize, spec.max_pages, |_, _, _| {})
         .await?;
 
     // Step 4: rank and truncate

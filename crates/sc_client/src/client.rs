@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 use crate::client_id::extract_client_id;
 use crate::error::{Result, ScError};
 use crate::oauth::{client_credentials, CachedToken, OAuthConfig};
-use crate::types::{SearchFilters, SearchResponse, Track};
+use crate::types::{SearchFilters, SearchResponse, SortBy, Track};
 
 const API_BASE: &str = "https://api-v2.soundcloud.com";
 
@@ -269,6 +269,18 @@ impl Client {
         crate::playlist::create(&self.http, oauth_token, &client_id, title, sharing, track_ids).await
     }
 
+    /// Fetch a single page of search results from a raw `next_href` URL.
+    ///
+    /// SC's paginated responses include a `next_href` that points at the next
+    /// page but omits `client_id`. This method injects the current credential
+    /// and fetches the page with the same 401-retry logic as other calls.
+    pub async fn fetch_search_page(&self, next_href: &str) -> Result<SearchResponse> {
+        let client_id = self.get_client_id().await?;
+        let sep = if next_href.contains('?') { '&' } else { '?' };
+        let url = format!("{next_href}{sep}client_id={client_id}");
+        self.get_json(&url).await
+    }
+
     /// Fetch raw bytes from a URL without authentication.
     ///
     /// Used by the server to proxy HLS segment bytes from the CDN. CDN URLs
@@ -351,6 +363,9 @@ fn build_search_url(client_id: &str, f: &SearchFilters) -> String {
         params.push(("filter.duration[to]", d.to_string()));
     }
     params.push(("limit", f.limit.unwrap_or(DEFAULT_LIMIT).to_string()));
+    if f.sort_by == SortBy::CreatedAt {
+        params.push(("order", "created_at".to_owned()));
+    }
     params.push(("client_id", client_id.to_string()));
 
     let qs = params

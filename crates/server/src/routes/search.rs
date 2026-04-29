@@ -34,7 +34,7 @@ pub struct SearchRequest {
 }
 
 fn default_target() -> usize { 30 }
-fn default_pages()  -> u32   { 20 }
+fn default_pages()  -> u32   { 50 }
 
 #[derive(serde::Serialize)]
 pub struct SearchStarted {
@@ -53,41 +53,46 @@ pub async fn start(
     let (_rx, snapshot) = create_session(&state.sessions, session_id);
 
     // Clone what the background task needs
-    let crater  = state.crater.clone();
+    let crater   = state.crater.clone();
     let sessions = state.sessions.clone();
-    let target  = req.target_size;
-    let pages   = req.max_pages;
-    let filters = req.filters;
+    let target   = req.target_size;
+    let pages    = req.max_pages;
+    let filters  = req.filters;
+
+    let snap_clone    = snapshot.clone();
+    let sessions_clone = sessions.clone();
 
     tokio::spawn(async move {
         let mut session = crater.new_session(filters);
 
-        match session.next_batch(target, pages).await {
+        let result = session.next_batch(target, pages, |track, pages_scanned, total_scanned| {
+            {
+                let mut snap = snap_clone.write().unwrap();
+                snap.pages_scanned = pages_scanned;
+                snap.total_scanned = total_scanned;
+                snap.tracks.push(track.clone());
+            }
+            with_session_tx(&sessions_clone, session_id, |tx, _| {
+                let _ = tx.send(SearchEvent::Track {
+                    session_id,
+                    track,
+                    total_scanned,
+                    pages_scanned,
+                });
+            });
+        }).await;
+
+        match result {
             Ok(batch) => {
                 let total_accepted = batch.tracks.len();
-
-                // Update snapshot and broadcast each track in order
-                for track in batch.tracks {
-                    {
-                        let mut snap = snapshot.write().unwrap();
-                        snap.pages_scanned = batch.pages_scanned;
-                        snap.total_scanned = batch.total_scanned;
-                        snap.tracks.push(track.clone());
-                    }
-                    with_session_tx(&sessions, session_id, |tx, _| {
-                        let _ = tx.send(SearchEvent::Track {
-                            session_id,
-                            track,
-                            total_scanned: batch.total_scanned,
-                            pages_scanned: batch.pages_scanned,
-                        });
-                    });
-                }
-
                 {
                     let mut snap = snapshot.write().unwrap();
                     snap.status    = SearchStatus::Complete;
                     snap.exhausted = batch.exhausted;
+                    // pages_scanned/total_scanned already updated per-track;
+                    // set final values in case the last page yielded no tracks.
+                    snap.pages_scanned = batch.pages_scanned;
+                    snap.total_scanned = batch.total_scanned;
                 }
                 with_session_tx(&sessions, session_id, |tx, _| {
                     let _ = tx.send(SearchEvent::Complete {

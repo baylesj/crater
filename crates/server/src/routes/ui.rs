@@ -583,6 +583,13 @@ const DIG: &str = r##"<!DOCTYPE html>
       <div class="filter-label">max duration (min)</div>
       <input id="f-max-dur" type="number" placeholder="10" min="0">
     </div>
+    <div class="filter-group">
+      <div class="filter-label">sort</div>
+      <select id="f-sort">
+        <option value="relevance">relevance</option>
+        <option value="created_at">newest first</option>
+      </select>
+    </div>
     <hr class="rule">
     <div class="filter-group">
       <div class="filter-label">target tracks</div>
@@ -590,7 +597,7 @@ const DIG: &str = r##"<!DOCTYPE html>
     </div>
     <div class="filter-group">
       <div class="filter-label">max pages</div>
-      <input id="f-pages" type="number" value="20" min="1" max="100">
+      <input id="f-pages" type="number" value="50" min="1" max="500">
     </div>
     <div class="filter-actions">
       <button class="btn-primary"    onclick="startSearch()">search</button>
@@ -686,14 +693,15 @@ function syncToUrl(f, target, pages) {
   if (f.max_plays)      sp.set('mp', f.max_plays);
   if (f.min_likes)      sp.set('ml', f.min_likes);
   if (f.duration_to_ms) sp.set('md', f.duration_to_ms / 60_000);
+  if (f.sort_by && f.sort_by !== 'relevance') sp.set('s', f.sort_by);
   if (target && target !== 30) sp.set('t', target);
-  if (pages  && pages  !== 20) sp.set('p', pages);
+  if (pages  && pages  !== 50) sp.set('p', pages);
   history.replaceState(null, '', sp.toString() ? `?${sp}` : location.pathname);
 }
 
 function loadFromUrl() {
   const sp = new URLSearchParams(location.search);
-  const keys = ['q','g','bf','bt','mp','ml','md','t','p'];
+  const keys = ['q','g','bf','bt','mp','ml','md','s','t','p'];
   if (!keys.some(k => sp.has(k))) return false;
   if (sp.has('q'))  document.getElementById('f-query').value     = sp.get('q');
   if (sp.has('g'))  document.getElementById('f-genre').value     = sp.get('g');
@@ -702,6 +710,7 @@ function loadFromUrl() {
   if (sp.has('mp')) document.getElementById('f-max-plays').value = sp.get('mp');
   if (sp.has('ml')) document.getElementById('f-min-likes').value = sp.get('ml');
   if (sp.has('md')) document.getElementById('f-max-dur').value   = sp.get('md');
+  if (sp.has('s'))  document.getElementById('f-sort').value      = sp.get('s');
   if (sp.has('t'))  document.getElementById('f-target').value    = sp.get('t');
   if (sp.has('p'))  document.getElementById('f-pages').value     = sp.get('p');
   return true;
@@ -719,6 +728,7 @@ function queryLabel(f) {
     f.max_plays      ? `≤${f.max_plays} plays` : null,
     f.min_likes      ? `≥${f.min_likes} likes` : null,
     f.duration_to_ms ? `≤${Math.round(f.duration_to_ms/60000)}min` : null,
+    f.sort_by === 'created_at' ? 'newest' : null,
   ].filter(Boolean);
   return parts.length ? parts.join(' · ') : 'no filters';
 }
@@ -759,8 +769,9 @@ function applyQuery(idx) {
   document.getElementById('f-max-plays').value = f.max_plays      || '';
   document.getElementById('f-min-likes').value = f.min_likes     || '';
   document.getElementById('f-max-dur').value   = f.duration_to_ms ? f.duration_to_ms / 60_000 : '';
+  document.getElementById('f-sort').value      = f.sort_by       || 'relevance';
   document.getElementById('f-target').value    = target || 30;
-  document.getElementById('f-pages').value     = pages  || 20;
+  document.getElementById('f-pages').value     = pages  || 50;
   startSearch();
 }
 
@@ -805,6 +816,7 @@ async function startSearch() {
   const mp = num('f-max-plays');
   const ml = num('f-min-likes');
   const md = num('f-max-dur');
+  const so = document.getElementById('f-sort').value;
   if (q)  f.query          = q;
   if (g)  f.genre_or_tag   = g;
   if (bf) f.bpm_from       = bf;
@@ -812,9 +824,10 @@ async function startSearch() {
   if (mp) f.max_plays      = mp;
   if (ml) f.min_likes      = ml;
   if (md) f.duration_to_ms = md * 60_000;
+  if (so && so !== 'relevance') f.sort_by = so;
 
   const target = num('f-target') || 30;
-  const pages  = num('f-pages')  || 20;
+  const pages  = num('f-pages')  || 50;
 
   syncToUrl(f, target, pages);
   saveRecentQuery(f, target, pages);
@@ -1195,8 +1208,9 @@ function resetFilters() {
   ['f-query','f-genre','f-bpm-from','f-bpm-to','f-max-plays','f-min-likes','f-max-dur'].forEach(
     id => { document.getElementById(id).value = ''; }
   );
+  document.getElementById('f-sort').value   = 'relevance';
   document.getElementById('f-target').value = 30;
-  document.getElementById('f-pages').value  = 20;
+  document.getElementById('f-pages').value  = 50;
   history.replaceState(null, '', location.pathname);
 }
 

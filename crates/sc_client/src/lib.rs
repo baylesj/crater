@@ -34,6 +34,6 @@ pub use error::{Result, ScError};
 pub use oauth::{OAuthConfig, TokenResponse};
 pub use playlist::CreatedPlaylist;
 pub use types::{
-    pick_hls_transcoding, Media, SearchFilters, SearchResponse, Track,
+    pick_hls_transcoding, Media, SearchFilters, SearchResponse, SortBy, Track,
     Transcoding, TranscodingFormat, User,
 };
