@@ -58,6 +58,7 @@ pub struct StoredTrack {
     pub likes_count:   Option<i64>,
     pub reposts_count: Option<i64>,
     pub comment_count: Option<i64>,
+    pub artwork_url:   Option<String>,
     pub created_at_sc: Option<String>,
     pub first_seen:    chrono::DateTime<chrono::Utc>,
     pub last_seen:     chrono::DateTime<chrono::Utc>,
@@ -105,13 +106,17 @@ pub async fn upsert_track(pool: &SqlitePool, track: &sc_client::Track) -> Result
     let artist        = track.user.as_ref().and_then(|u| u.username.as_deref());
     let artist_sc_id  = track.user.as_ref().map(|u| u.id as i64);
 
+    // Artwork: track's own artwork_url, falling back to uploader's avatar.
+    let artwork_url = track.artwork_url.as_deref()
+        .or_else(|| track.user.as_ref().and_then(|u| u.avatar_url.as_deref()));
+
     sqlx::query(r#"
         INSERT INTO tracks (
             id, title, artist, artist_sc_id, permalink_url,
             duration_ms, bpm, genre, tag_list,
             playback_count, likes_count, reposts_count, comment_count,
-            created_at_sc, raw_json, last_seen
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            artwork_url, created_at_sc, raw_json, last_seen
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
             title          = excluded.title,
             artist         = excluded.artist,
@@ -125,6 +130,7 @@ pub async fn upsert_track(pool: &SqlitePool, track: &sc_client::Track) -> Result
             likes_count    = excluded.likes_count,
             reposts_count  = excluded.reposts_count,
             comment_count  = excluded.comment_count,
+            artwork_url    = excluded.artwork_url,
             created_at_sc  = excluded.created_at_sc,
             raw_json       = excluded.raw_json,
             last_seen      = CURRENT_TIMESTAMP
@@ -142,6 +148,7 @@ pub async fn upsert_track(pool: &SqlitePool, track: &sc_client::Track) -> Result
     .bind(track.likes_count.map(|c| c as i64))
     .bind(track.reposts_count.map(|c| c as i64))
     .bind(track.comment_count.map(|c| c as i64))
+    .bind(artwork_url)
     .bind(track.created_at.as_deref())
     .bind(&raw_json)
     .execute(pool)
@@ -185,7 +192,7 @@ pub async fn get_track(pool: &SqlitePool, track_id: i64) -> Result<Option<Stored
         SELECT t.id, t.title, t.artist, t.artist_sc_id, t.permalink_url,
                t.duration_ms, t.bpm, t.genre, t.tag_list,
                t.playback_count, t.likes_count, t.reposts_count, t.comment_count,
-               t.created_at_sc, t.first_seen, t.last_seen, t.raw_json,
+               t.artwork_url, t.created_at_sc, t.first_seen, t.last_seen, t.raw_json,
                ts.status, ts.note AS status_note
         FROM tracks t
         LEFT JOIN track_status ts ON ts.track_id = t.id
@@ -204,7 +211,7 @@ pub async fn tracks_with_status(
         SELECT t.id, t.title, t.artist, t.artist_sc_id, t.permalink_url,
                t.duration_ms, t.bpm, t.genre, t.tag_list,
                t.playback_count, t.likes_count, t.reposts_count, t.comment_count,
-               t.created_at_sc, t.first_seen, t.last_seen, t.raw_json,
+               t.artwork_url, t.created_at_sc, t.first_seen, t.last_seen, t.raw_json,
                ts.status, ts.note AS status_note
         FROM tracks t
         JOIN track_status ts ON ts.track_id = t.id

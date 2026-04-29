@@ -53,6 +53,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/queue",                       get(ui::queue_page))
         .route("/digests",                     get(ui::digests_page))
         .route("/digests/{id}",                get(ui::digest_detail_page))
+        .route("/hearted",                     get(ui::hearted_page))
         .route("/history",                     get(ui::history_page))
         .route("/settings",                    get(ui::settings_page))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth::require_auth))

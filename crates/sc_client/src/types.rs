@@ -68,6 +68,11 @@ pub struct Track {
     pub user: Option<User>,
 
     /// "allow" | "snip" | "blocked". We filter to "allow" when streaming.
+    /// Cover art URL. The API returns the `-large` (100×100) variant by default;
+    /// callers can replace the size suffix to request other sizes.
+    #[serde(default)]
+    pub artwork_url: Option<String>,
+
     #[serde(default)]
     pub access: Option<String>,
 
@@ -125,6 +130,8 @@ pub struct User {
     pub permalink_url: Option<String>,
     #[serde(default)]
     pub followers_count: Option<u64>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
 }
 
 /// The shape of a paginated v2 search response. `next_href` is a

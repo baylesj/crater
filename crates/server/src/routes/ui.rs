@@ -14,6 +14,7 @@ pub async fn index() -> axum::response::Redirect {
 }
 
 pub async fn dig()               -> Html<String> { Html(DIG.replace("/* CSS_PLACEHOLDER */", CSS)) }
+pub async fn hearted_page()      -> Html<String> { Html(HEARTED.replace("/* CSS_PLACEHOLDER */", CSS)) }
 pub async fn queue_page()        -> Html<String> { Html(QUEUE.replace("/* CSS_PLACEHOLDER */", CSS)) }
 pub async fn digests_page()      -> Html<String> { Html(DIGESTS.replace("/* CSS_PLACEHOLDER */", CSS)) }
 pub async fn digest_detail_page(
@@ -157,16 +158,20 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 /* ── track card ──────────────────────────────────────────────────────────── */
 .track {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 18px 40px 1fr auto;
   gap: 0 8px;
   padding: 7px 12px 7px 8px;
   border-bottom: 1px solid var(--bg-2);
   cursor: pointer;
   align-items: start;
 }
-.track:hover   { background: var(--bg-1); }
+.track:hover    { background: var(--bg-1); }
 .track.selected { background: var(--sel); }
 .track.playing  { background: var(--sel); }
+.track.status-queued  { background: rgba(127,179,131,.07); }
+.track.status-hearted { background: rgba(201,173,127,.07); }
+.track.status-rejected { opacity: .45; }
+.track.status-rejected .track-title { text-decoration: line-through; }
 
 .ind {
   font-size: 11px;
@@ -175,9 +180,10 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
   flex-shrink: 0;
   width: 14px;
 }
-.ind-playing { color: var(--fg-0); }
-.ind-hearted { color: var(--accent); }
-.ind-queued  { color: var(--queued); }
+.ind-playing  { color: var(--fg-0); }
+.ind-hearted  { color: var(--accent); }
+.ind-queued   { color: var(--queued); }
+.ind-rejected { color: var(--danger); }
 
 .track-body { min-width: 0; }
 .track-line1 {
@@ -230,6 +236,26 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
   border-radius: 2px;
 }
 .track-actions button:hover, .track-actions a:hover { color: var(--fg-0); background: var(--bg-2); }
+.track-actions .act-queue:hover  { color: var(--queued); background: var(--bg-2); }
+.track-actions .act-heart:hover  { color: var(--accent); background: var(--bg-2); }
+.track-actions .act-reject:hover { color: var(--danger); background: var(--bg-2); }
+
+/* ── track artwork thumbnail ────────────────────────────────────────────── */
+.track-art {
+  width: 36px; height: 36px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg-2);
+  flex-shrink: 0;
+  align-self: center;
+}
+.track-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.track-art-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--bg-3);
+  user-select: none;
+}
 
 /* ── now-playing pane ────────────────────────────────────────────────────── */
 #now-playing {
@@ -244,6 +270,16 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 
 .np-title { font-size: 14px; font-weight: 600; color: var(--fg-0); line-height: 1.3; }
 .np-artist { font-size: 12px; color: var(--fg-1); }
+
+.np-art {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+.np-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.np-art:empty { display: none; }
 
 .np-waveform {
   height: 56px;
@@ -312,6 +348,9 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 }
 .np-btn:hover { color: var(--fg-0); background: var(--bg-2); }
 .np-btn .kbd { float: right; color: var(--fg-2); font-family: monospace; }
+.np-btn.np-active-queue  { color: var(--queued); border-color: var(--queued); }
+.np-btn.np-active-heart  { color: var(--accent); border-color: var(--accent); }
+.np-btn.np-active-reject { color: var(--danger); border-color: var(--danger); }
 
 .np-sc-link { font-size: 11px; color: var(--fg-2); text-align: center; margin-top: 4px; }
 .np-sc-link:hover { color: var(--fg-0); }
@@ -381,6 +420,15 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
               font-family: monospace; font-variant-numeric: tabular-nums; }
 .card-actions { margin-top: 10px; display: flex; gap: 8px; }
 .empty-state { color: var(--fg-2); font-size: 13px; padding: 24px 0; text-align: center; }
+
+/* ── recent queries (dig sidebar) ───────────────────────────────────────────── */
+.recent-query-item {
+  display: block; width: 100%; text-align: left;
+  font-size: 11px; color: var(--fg-2);
+  padding: 3px 6px; border-radius: 3px; cursor: pointer;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.recent-query-item:hover { color: var(--fg-0); background: var(--bg-2); }
 "##;
 
 // ── /dig ──────────────────────────────────────────────────────────────────────
@@ -398,6 +446,7 @@ const DIG: &str = r##"<!DOCTYPE html>
   <span class="logo">crater</span>
   <nav>
     <a href="/dig" class="active">dig</a>
+    <a href="/hearted">hearted <span class="nav-badge" id="hearted-count">0</span></a>
     <a href="/queue">queue <span class="nav-badge" id="queue-count">0</span></a>
     <a href="/digests">digests</a>
   </nav>
@@ -543,6 +592,14 @@ const DIG: &str = r##"<!DOCTYPE html>
       <button class="btn-primary"    onclick="startSearch()">search</button>
       <button class="btn-secondary"  onclick="resetFilters()">reset</button>
     </div>
+    <div id="recent-section" style="display:none">
+      <div class="filter-label">recent</div>
+      <div id="recent-queries"></div>
+    </div>
+    <div id="rejected-bar" style="display:none;margin-top:auto;padding-top:8px;border-top:1px solid var(--bg-2)">
+      <a href="/history" id="rejected-link"
+         style="font-size:11px;color:var(--fg-2)"></a>
+    </div>
   </aside>
 
   <!-- RESULTS -->
@@ -558,6 +615,7 @@ const DIG: &str = r##"<!DOCTYPE html>
   <aside id="now-playing">
     <div class="np-title"  id="np-title">—</div>
     <div class="np-artist" id="np-artist"></div>
+    <div class="np-art" id="np-art"></div>
     <div class="np-waveform"></div>
     <div class="np-scrubber-row">
       <span id="np-current">0:00</span>
@@ -571,9 +629,9 @@ const DIG: &str = r##"<!DOCTYPE html>
       <button onclick="nextTrack()" title="next">⏭</button>
     </div>
     <div class="np-btn-group">
-      <button class="np-btn" onclick="actSelected('queued')"   title="queue [y]">queue<span class="kbd">y</span></button>
-      <button class="np-btn" onclick="actSelected('rejected')" title="reject [n]">reject<span class="kbd">n</span></button>
-      <button class="np-btn" onclick="actSelected('hearted')"  title="heart [h]">heart<span class="kbd">h</span></button>
+      <button class="np-btn" id="np-btn-queue"  onclick="actSelected('queued')"   title="queue [y]">✓ queue<span class="kbd">y</span></button>
+      <button class="np-btn" id="np-btn-reject" onclick="actSelected('rejected')" title="reject [n]">✕ reject<span class="kbd">n</span></button>
+      <button class="np-btn" id="np-btn-heart"  onclick="actSelected('hearted')"  title="heart [h]">♥ heart<span class="kbd">h</span></button>
     </div>
     <a class="np-sc-link" id="np-sc-link" href="#" target="_blank" rel="noopener">open on SoundCloud ↗</a>
   </aside>
@@ -612,6 +670,95 @@ let nowPlayingIdx = -1;     // index in tracks[]
 let pagesScanned  = 0;
 let totalScanned  = 0;
 let searching     = false;
+let rejectedCount = 0;
+
+// ── URL ↔ filter sync ─────────────────────────────────────────────────────────
+function syncToUrl(f, target, pages) {
+  const sp = new URLSearchParams();
+  if (f.query)          sp.set('q',  f.query);
+  if (f.genre_or_tag)   sp.set('g',  f.genre_or_tag);
+  if (f.bpm_from)       sp.set('bf', f.bpm_from);
+  if (f.bpm_to)         sp.set('bt', f.bpm_to);
+  if (f.max_plays)      sp.set('mp', f.max_plays);
+  if (f.min_likes)      sp.set('ml', f.min_likes);
+  if (f.duration_to_ms) sp.set('md', f.duration_to_ms / 60_000);
+  if (target && target !== 30) sp.set('t', target);
+  if (pages  && pages  !== 20) sp.set('p', pages);
+  history.replaceState(null, '', sp.toString() ? `?${sp}` : location.pathname);
+}
+
+function loadFromUrl() {
+  const sp = new URLSearchParams(location.search);
+  const keys = ['q','g','bf','bt','mp','ml','md','t','p'];
+  if (!keys.some(k => sp.has(k))) return false;
+  if (sp.has('q'))  document.getElementById('f-query').value     = sp.get('q');
+  if (sp.has('g'))  document.getElementById('f-genre').value     = sp.get('g');
+  if (sp.has('bf')) document.getElementById('f-bpm-from').value  = sp.get('bf');
+  if (sp.has('bt')) document.getElementById('f-bpm-to').value    = sp.get('bt');
+  if (sp.has('mp')) document.getElementById('f-max-plays').value = sp.get('mp');
+  if (sp.has('ml')) document.getElementById('f-min-likes').value = sp.get('ml');
+  if (sp.has('md')) document.getElementById('f-max-dur').value   = sp.get('md');
+  if (sp.has('t'))  document.getElementById('f-target').value    = sp.get('t');
+  if (sp.has('p'))  document.getElementById('f-pages').value     = sp.get('p');
+  return true;
+}
+
+// ── Recent queries ─────────────────────────────────────────────────────────────
+const RECENT_KEY = 'crater_recent_queries';
+const RECENT_MAX = 10;
+
+function queryLabel(f) {
+  const parts = [
+    f.query          ? `"${f.query}"` : null,
+    f.genre_or_tag   || null,
+    (f.bpm_from || f.bpm_to) ? `${f.bpm_from||'?'}–${f.bpm_to||'?'}bpm` : null,
+    f.max_plays      ? `≤${f.max_plays} plays` : null,
+    f.min_likes      ? `≥${f.min_likes} likes` : null,
+    f.duration_to_ms ? `≤${Math.round(f.duration_to_ms/60000)}min` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'no filters';
+}
+
+function saveRecentQuery(f, target, pages) {
+  const label = queryLabel(f);
+  let recent = getRecentQueries();
+  recent = recent.filter(r => r.label !== label);
+  recent.unshift({label, f, target, pages});
+  if (recent.length > RECENT_MAX) recent.length = RECENT_MAX;
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch {}
+  renderRecentQueries(recent);
+}
+
+function getRecentQueries() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+}
+
+function renderRecentQueries(recent) {
+  recent = recent || getRecentQueries();
+  const section = document.getElementById('recent-section');
+  const list    = document.getElementById('recent-queries');
+  if (!recent.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  list.innerHTML = recent.map((r, i) =>
+    `<button class="recent-query-item" onclick="applyQuery(${i})" title="${esc(r.label)}">${esc(r.label)}</button>`
+  ).join('');
+}
+
+function applyQuery(idx) {
+  const recent = getRecentQueries();
+  if (idx >= recent.length) return;
+  const {f, target, pages} = recent[idx];
+  document.getElementById('f-query').value     = f.query         || '';
+  document.getElementById('f-genre').value     = f.genre_or_tag  || '';
+  document.getElementById('f-bpm-from').value  = f.bpm_from      || '';
+  document.getElementById('f-bpm-to').value    = f.bpm_to        || '';
+  document.getElementById('f-max-plays').value = f.max_plays      || '';
+  document.getElementById('f-min-likes').value = f.min_likes     || '';
+  document.getElementById('f-max-dur').value   = f.duration_to_ms ? f.duration_to_ms / 60_000 : '';
+  document.getElementById('f-target').value    = target || 30;
+  document.getElementById('f-pages').value     = pages  || 20;
+  startSearch();
+}
 
 // ── WebSocket ──────────────────────────────────────────────────────────────────
 function ensureWS() {
@@ -662,16 +809,18 @@ async function startSearch() {
   if (ml) f.min_likes      = ml;
   if (md) f.duration_to_ms = md * 60_000;
 
+  const target = num('f-target') || 30;
+  const pages  = num('f-pages')  || 20;
+
+  syncToUrl(f, target, pages);
+  saveRecentQuery(f, target, pages);
+
   let resp;
   try {
     resp = await fetch('/api/search', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        filters:     f,
-        target_size: num('f-target') || 30,
-        max_pages:   num('f-pages')  || 20,
-      }),
+      body: JSON.stringify({filters: f, target_size: target, max_pages: pages}),
     });
   } catch(e) {
     setStatus('network error: ' + e.message);
@@ -691,11 +840,13 @@ async function startSearch() {
 function onTrack({track, total_scanned, pages_scanned}) {
   pagesScanned = pages_scanned;
   totalScanned = total_scanned;
+  // Skip tracks already processed in a previous session
+  if (track.status && ['hearted','queued','rejected','exported'].includes(track.status)) return;
   const idx = tracks.length;
   tracks.push(track);
   document.getElementById('track-list').insertAdjacentHTML('beforeend', cardHtml(track, idx));
   document.getElementById('status-counts').textContent =
-    `${tracks.length} accepted · ${totalScanned} scanned · ${pagesScanned} pages`;
+    `${tracks.length} shown · ${totalScanned} scanned · ${pagesScanned} pages`;
 }
 
 function onComplete({exhausted, total_accepted, total_scanned, pages_scanned}) {
@@ -728,14 +879,17 @@ function onSearchError({message}) {
 // ── Track card rendering ──────────────────────────────────────────────────────
 function cardHtml(t, idx) {
   const playing = idx === nowPlayingIdx;
-  const ind = playing           ? '▶'
-            : t.status === 'hearted' ? '★'
-            : t.status === 'queued'  ? '✓'
+  const ind = playing                   ? '▶'
+            : t.status === 'hearted'    ? '★'
+            : t.status === 'queued'     ? '✓'
+            : t.status === 'rejected'   ? '✕'
             : '';
-  const indCls = playing                ? 'ind ind-playing'
-               : t.status === 'hearted' ? 'ind ind-hearted'
-               : t.status === 'queued'  ? 'ind ind-queued'
+  const indCls = playing                  ? 'ind ind-playing'
+               : t.status === 'hearted'   ? 'ind ind-hearted'
+               : t.status === 'queued'    ? 'ind ind-queued'
+               : t.status === 'rejected'  ? 'ind ind-rejected'
                : 'ind';
+  const statusCls = t.status && !playing ? ` status-${t.status}` : '';
 
   const ratio = (t.likes_count > 0 && t.playback_count > 0)
     ? (t.likes_count / t.playback_count).toFixed(3) : null;
@@ -755,9 +909,14 @@ function cardHtml(t, idx) {
 
   const aUrl = artistUrl(t.permalink_url);
 
-  return `<li class="track${playing ? ' playing' : ''}" data-id="${t.id}" data-idx="${idx}"
+  const artHtml = t.artwork_url
+    ? `<img src="${esc(t.artwork_url)}" alt="" loading="lazy">`
+    : `<div class="track-art-placeholder">♪</div>`;
+
+  return `<li class="track${playing ? ' playing' : ''}${statusCls}" data-id="${t.id}" data-idx="${idx}"
      onclick="clickTrack(event, ${idx})">
   <span class="${indCls}" id="ind-${t.id}">${ind}</span>
+  <div class="track-art">${artHtml}</div>
   <div class="track-body">
     <div class="track-line1">
       <button class="track-title" onclick="event.stopPropagation();playIdx(${idx})">${esc(t.title||'untitled')}</button>
@@ -769,9 +928,9 @@ function cardHtml(t, idx) {
     <div class="track-meta2">${meta2}</div>
   </div>
   <div class="track-actions" onclick="event.stopPropagation()">
-    <button onclick="act(${t.id},'queued')"   title="queue [y]">✓</button>
-    <button onclick="act(${t.id},'hearted')"  title="heart [h]">♥</button>
-    <button onclick="act(${t.id},'rejected')" title="reject [n]">✕</button>
+    <button class="act-queue"  onclick="act(${t.id},'queued')"   title="queue [y]">✓</button>
+    <button class="act-heart"  onclick="act(${t.id},'hearted')"  title="heart [h]">♥</button>
+    <button class="act-reject" onclick="act(${t.id},'rejected')" title="reject [n]">✕</button>
     <a href="${esc(t.permalink_url||'#')}" target="_blank" rel="noopener" title="open on SoundCloud [o]">↗</a>
   </div>
 </li>`;
@@ -857,6 +1016,26 @@ function updateNowPlayingPanel(t) {
   document.getElementById('np-duration').textContent = fmtDur(t.duration_ms);
   const link = document.getElementById('np-sc-link');
   link.href = t.permalink_url || '#';
+  const artEl = document.getElementById('np-art');
+  if (t.artwork_url) {
+    const large = t.artwork_url.replace(/-large\./, '-t500x500.');
+    artEl.innerHTML = `<img src="${esc(large)}" alt="">`;
+  } else {
+    artEl.innerHTML = '';
+  }
+  updateNowPlayingButtons(t.status);
+}
+
+function updateNowPlayingButtons(status) {
+  const btns = {
+    queued:   document.getElementById('np-btn-queue'),
+    rejected: document.getElementById('np-btn-reject'),
+    hearted:  document.getElementById('np-btn-heart'),
+  };
+  const cls = {queued: 'np-active-queue', rejected: 'np-active-reject', hearted: 'np-active-heart'};
+  for (const [s, el] of Object.entries(btns)) {
+    el.classList.toggle(cls[s], s === status);
+  }
 }
 
 // ── Status actions ────────────────────────────────────────────────────────────
@@ -870,12 +1049,15 @@ async function act(id, status) {
   if (idx >= 0) {
     tracks[idx] = {...tracks[idx], status};
     refreshCard(idx);
+    if (idx === nowPlayingIdx) updateNowPlayingButtons(status);
     if (status === 'rejected') {
-      // Advance selection past rejected track
+      rejectedCount++;
+      updateRejectedBar();
       if (idx === selectedIdx && idx + 1 < tracks.length) setSelected(idx + 1);
     }
   }
   refreshQueueCount();
+  refreshHeartedCount();
 }
 
 function actSelected(status) {
@@ -883,13 +1065,38 @@ function actSelected(status) {
   if (idx >= 0) act(tracks[idx].id, status);
 }
 
-// ── Queue count in nav ────────────────────────────────────────────────────────
+// ── Nav badge counts ──────────────────────────────────────────────────────────
 async function refreshQueueCount() {
   try {
     const r = await fetch('/api/tracks?status=queued');
     const arr = await r.json();
     document.getElementById('queue-count').textContent = Array.isArray(arr) ? arr.length : 0;
   } catch {}
+}
+
+async function refreshHeartedCount() {
+  try {
+    const r = await fetch('/api/tracks?status=hearted');
+    const arr = await r.json();
+    document.getElementById('hearted-count').textContent = Array.isArray(arr) ? arr.length : 0;
+  } catch {}
+}
+
+async function refreshRejectedCount() {
+  try {
+    const r = await fetch('/api/tracks?status=rejected');
+    const arr = await r.json();
+    rejectedCount = Array.isArray(arr) ? arr.length : 0;
+    updateRejectedBar();
+  } catch {}
+}
+
+function updateRejectedBar() {
+  const bar  = document.getElementById('rejected-bar');
+  const link = document.getElementById('rejected-link');
+  if (rejectedCount === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  link.textContent = `[x] ${rejectedCount} rejected — view`;
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
@@ -980,9 +1187,21 @@ function setStatus(msg) {
   document.getElementById('status-text').textContent = msg;
 }
 
+function resetFilters() {
+  ['f-query','f-genre','f-bpm-from','f-bpm-to','f-max-plays','f-min-likes','f-max-dur'].forEach(
+    id => { document.getElementById(id).value = ''; }
+  );
+  document.getElementById('f-target').value = 30;
+  document.getElementById('f-pages').value  = 20;
+  history.replaceState(null, '', location.pathname);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 refreshQueueCount();
-document.getElementById('nav-dig').classList.add('active');
+refreshHeartedCount();
+refreshRejectedCount();
+renderRecentQueries();
+if (loadFromUrl()) startSearch();
 </script>
 </body>
 </html>"##;
@@ -1002,6 +1221,7 @@ const QUEUE: &str = r##"<!DOCTYPE html>
   <span class="logo">crater</span>
   <nav>
     <a href="/dig">dig</a>
+    <a href="/hearted">hearted</a>
     <a href="/queue" class="active">queue <span class="nav-badge" id="queue-count">0</span></a>
     <a href="/digests">digests</a>
   </nav>
@@ -1143,6 +1363,141 @@ loadQueue();
 </body>
 </html>"##;
 
+// ── /hearted ──────────────────────────────────────────────────────────────────
+
+const HEARTED: &str = r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>crater / hearted</title>
+<style>/* CSS_PLACEHOLDER */</style>
+</head>
+<body>
+<header>
+  <span class="logo">crater</span>
+  <nav>
+    <a href="/dig">dig</a>
+    <a href="/hearted" class="active">hearted <span class="nav-badge" id="hearted-count">0</span></a>
+    <a href="/queue">queue</a>
+    <a href="/digests">digests</a>
+  </nav>
+</header>
+
+<div class="page-layout">
+  <div class="page-header">
+    <span class="page-title" id="hearted-header">HEARTED</span>
+    <span style="font-size:12px;color:var(--fg-2)" id="hearted-duration"></span>
+  </div>
+
+  <div id="hearted-list"></div>
+</div>
+
+<script>
+'use strict';
+
+let heartedTracks = [];
+
+async function load() {
+  const r = await fetch('/api/tracks?status=hearted');
+  heartedTracks = await r.json();
+  if (!Array.isArray(heartedTracks)) heartedTracks = [];
+  render();
+}
+
+function render() {
+  const list = document.getElementById('hearted-list');
+  document.getElementById('hearted-count').textContent = heartedTracks.length;
+
+  if (heartedTracks.length === 0) {
+    list.innerHTML = '<div class="empty-state">No hearted tracks. Heart tracks from the dig page using [h] or the ♥ button.</div>';
+    document.getElementById('hearted-header').textContent = 'HEARTED — empty';
+    document.getElementById('hearted-duration').textContent = '';
+    return;
+  }
+
+  const totalMs = heartedTracks.reduce((s, t) => s + (t.duration_ms || 0), 0);
+  const h = Math.floor(totalMs / 3_600_000);
+  const m = Math.floor((totalMs % 3_600_000) / 60_000);
+  document.getElementById('hearted-header').textContent =
+    `HEARTED — ${heartedTracks.length} track${heartedTracks.length === 1 ? '' : 's'}`;
+  document.getElementById('hearted-duration').textContent =
+    h > 0 ? `${h}h ${m}m total` : `${m}m total`;
+
+  list.innerHTML = heartedTracks.map(t => {
+    const dur = fmtDur(t.duration_ms);
+    const meta = [
+      t.playback_count != null ? `${t.playback_count} plays` : null,
+      t.likes_count    != null ? `${t.likes_count} likes`    : null,
+      t.bpm ? `${Math.round(t.bpm)}bpm` : null,
+      dur,
+      t.genre,
+    ].filter(Boolean).join(' · ');
+
+    return `<div class="card" data-id="${t.id}">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">
+        <div>
+          <div class="card-title">
+            <a href="${esc(t.permalink_url||'#')}" target="_blank" rel="noopener"
+               style="color:inherit">${esc(t.title||'untitled')}</a>
+            <span style="color:var(--fg-2);font-weight:400"> — ${esc(t.artist||'unknown')}</span>
+          </div>
+          <div class="card-meta">${meta}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <a href="${esc(t.permalink_url||'#')}" target="_blank" rel="noopener"
+             style="font-size:12px;color:var(--fg-2)">SC ↗</a>
+          <button onclick="promoteToQueue(${t.id})"
+                  style="font-size:12px;color:var(--queued);padding:3px 7px;border:1px solid var(--bg-2);border-radius:3px">
+            queue it
+          </button>
+          <button onclick="unheart(${t.id})"
+                  style="font-size:12px;color:var(--fg-2);padding:3px 7px;border:1px solid var(--bg-2);border-radius:3px">
+            un-heart
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function promoteToQueue(id) {
+  await fetch(`/api/tracks/${id}/status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: 'queued'}),
+  });
+  heartedTracks = heartedTracks.filter(t => t.id !== id);
+  render();
+}
+
+async function unheart(id) {
+  await fetch(`/api/tracks/${id}/status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: null}),
+  });
+  heartedTracks = heartedTracks.filter(t => t.id !== id);
+  render();
+}
+
+function fmtDur(ms) {
+  if (!ms && ms !== 0) return '';
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2,'0')}`;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = typeof s === 'string' ? s : String(s ?? '');
+  return d.innerHTML;
+}
+
+load();
+</script>
+</body>
+</html>"##;
+
 // ── /digests ──────────────────────────────────────────────────────────────────
 
 const DIGESTS: &str = r##"<!DOCTYPE html>
@@ -1158,7 +1513,8 @@ const DIGESTS: &str = r##"<!DOCTYPE html>
   <span class="logo">crater</span>
   <nav>
     <a href="/dig">dig</a>
-    <a href="/queue">queue <span class="nav-badge" id="queue-count">0</span></a>
+    <a href="/hearted">hearted</a>
+    <a href="/queue">queue</a>
     <a href="/digests" class="active">digests</a>
   </nav>
 </header>
@@ -1274,6 +1630,7 @@ const DIGEST_DETAIL: &str = r##"<!DOCTYPE html>
   <span class="logo">crater</span>
   <nav>
     <a href="/dig">dig</a>
+    <a href="/hearted">hearted</a>
     <a href="/queue">queue</a>
     <a href="/digests" class="active">digests</a>
   </nav>
@@ -1572,6 +1929,7 @@ const HISTORY: &str = r##"<!DOCTYPE html>
   <span class="logo">crater</span>
   <nav>
     <a href="/dig">dig</a>
+    <a href="/hearted">hearted</a>
     <a href="/queue">queue</a>
     <a href="/digests">digests</a>
     <a href="/history" class="active">history</a>
@@ -1681,6 +2039,7 @@ pub const SETTINGS: &str = r##"<!DOCTYPE html>
   <span class="logo">crater</span>
   <nav>
     <a href="/dig">dig</a>
+    <a href="/hearted">hearted</a>
     <a href="/queue">queue</a>
     <a href="/digests">digests</a>
     <a href="/history">history</a>
