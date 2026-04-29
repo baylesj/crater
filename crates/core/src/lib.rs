@@ -20,6 +20,15 @@ pub mod session;
 pub mod tracks;
 
 pub use digest_runner::{DigestRun, RunStatus};
+
+#[derive(Debug, serde::Serialize)]
+pub struct TrackStats {
+    pub total:    i64,
+    pub queued:   i64,
+    pub hearted:  i64,
+    pub rejected: i64,
+    pub exported: i64,
+}
 pub use digests::{Digest, DigestRunRow, DigestSpec, PlaylistVisibility};
 pub use error::{CoreError, Result};
 pub use filters::Ranking;
@@ -111,6 +120,14 @@ impl Crater {
         Ok(())
     }
 
+    pub async fn delete_kv(&self, key: &str) -> Result<()> {
+        sqlx::query("DELETE FROM kv WHERE k = ?")
+            .bind(key)
+            .execute(&self.db)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_kv(&self, key: &str) -> Result<Option<String>> {
         let row: Option<(String,)> = sqlx::query_as("SELECT v FROM kv WHERE k = ?")
             .bind(key)
@@ -193,6 +210,24 @@ impl Crater {
             .create_playlist(&token, title, sharing, &sc_ids)
             .await
             .map_err(CoreError::Sc)
+    }
+
+    // ── Stats ────────────────────────────────────────────────────────────
+
+    pub async fn track_stats(&self) -> Result<TrackStats> {
+        let row: (i64, i64, i64, i64, i64) = sqlx::query_as(r#"
+            SELECT
+                COUNT(*),
+                COALESCE(SUM(CASE WHEN ts.status='queued'   THEN 1 ELSE 0 END),0),
+                COALESCE(SUM(CASE WHEN ts.status='hearted'  THEN 1 ELSE 0 END),0),
+                COALESCE(SUM(CASE WHEN ts.status='rejected' THEN 1 ELSE 0 END),0),
+                COALESCE(SUM(CASE WHEN ts.status='exported' THEN 1 ELSE 0 END),0)
+            FROM tracks t
+            LEFT JOIN track_status ts ON ts.track_id = t.id
+        "#)
+        .fetch_one(&self.db)
+        .await?;
+        Ok(TrackStats { total: row.0, queued: row.1, hearted: row.2, rejected: row.3, exported: row.4 })
     }
 
     // ── Session ──────────────────────────────────────────────────────────

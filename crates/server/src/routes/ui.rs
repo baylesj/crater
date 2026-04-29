@@ -90,6 +90,9 @@ nav a { font-size: 12px; color: var(--fg-1); padding: 3px 0; border-bottom: 2px 
 nav a:hover, nav a.active { color: var(--fg-0); border-bottom-color: var(--accent); }
 .nav-badge { font-size: 10px; background: var(--bg-2); border-radius: 10px; padding: 1px 5px;
              color: var(--fg-2); margin-left: 3px; font-variant-numeric: tabular-nums; }
+.nav-cog { margin-left: auto; font-size: 20px; color: var(--fg-2);
+           padding: 2px 4px; line-height: 1; border-bottom: 2px solid transparent; }
+.nav-cog:hover, .nav-cog.active { color: var(--fg-0); border-bottom-color: var(--accent); }
 
 /* ── dig layout ──────────────────────────────────────────────────────────── */
 .dig-layout {
@@ -450,6 +453,7 @@ const DIG: &str = r##"<!DOCTYPE html>
     <a href="/queue">queue <span class="nav-badge" id="queue-count">0</span></a>
     <a href="/digests">digests</a>
   </nav>
+  <a href="/settings" class="nav-cog" title="settings">⚙</a>
 </header>
 
 <div class="dig-layout" id="layout">
@@ -889,7 +893,7 @@ function cardHtml(t, idx) {
                : t.status === 'queued'    ? 'ind ind-queued'
                : t.status === 'rejected'  ? 'ind ind-rejected'
                : 'ind';
-  const statusCls = t.status && !playing ? ` status-${t.status}` : '';
+  const statusCls = t.status ? ` status-${t.status}` : '';
 
   const ratio = (t.likes_count > 0 && t.playback_count > 0)
     ? (t.likes_count / t.playback_count).toFixed(3) : null;
@@ -1225,6 +1229,7 @@ const QUEUE: &str = r##"<!DOCTYPE html>
     <a href="/queue" class="active">queue <span class="nav-badge" id="queue-count">0</span></a>
     <a href="/digests">digests</a>
   </nav>
+  <a href="/settings" class="nav-cog" title="settings">⚙</a>
 </header>
 
 <div class="page-layout">
@@ -1382,6 +1387,7 @@ const HEARTED: &str = r##"<!DOCTYPE html>
     <a href="/queue">queue</a>
     <a href="/digests">digests</a>
   </nav>
+  <a href="/settings" class="nav-cog" title="settings">⚙</a>
 </header>
 
 <div class="page-layout">
@@ -1517,6 +1523,7 @@ const DIGESTS: &str = r##"<!DOCTYPE html>
     <a href="/queue">queue</a>
     <a href="/digests" class="active">digests</a>
   </nav>
+  <a href="/settings" class="nav-cog" title="settings">⚙</a>
 </header>
 
 <div class="page-layout">
@@ -1634,6 +1641,7 @@ const DIGEST_DETAIL: &str = r##"<!DOCTYPE html>
     <a href="/queue">queue</a>
     <a href="/digests" class="active">digests</a>
   </nav>
+  <a href="/settings" class="nav-cog" title="settings">⚙</a>
 </header>
 
 <div class="page-layout">
@@ -1934,6 +1942,7 @@ const HISTORY: &str = r##"<!DOCTYPE html>
     <a href="/digests">digests</a>
     <a href="/history" class="active">history</a>
   </nav>
+  <a href="/settings" class="nav-cog" title="settings">⚙</a>
 </header>
 
 <div class="page-layout">
@@ -2032,7 +2041,56 @@ pub const SETTINGS: &str = r##"<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>crater — settings</title>
-<style>/* CSS_PLACEHOLDER */</style>
+<style>/* CSS_PLACEHOLDER */
+.settings-section {
+  margin-bottom: 36px;
+}
+.settings-section h2 {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--fg-2);
+  margin-bottom: 16px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--bg-2);
+}
+.settings-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.settings-row label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--fg-2);
+  width: 90px; flex-shrink: 0;
+}
+.settings-row input { flex: 1; }
+.settings-msg { font-size: 12px; margin-top: 4px; min-height: 18px; }
+.stat-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+  margin-bottom: 14px;
+}
+.stat-cell {
+  background: var(--bg-1); border: 1px solid var(--bg-2); border-radius: 4px;
+  padding: 10px 12px; text-align: center;
+}
+.stat-cell .stat-num {
+  font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--fg-0); display: block;
+}
+.stat-cell .stat-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--fg-2); margin-top: 2px; display: block;
+}
+.status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 10px; border-radius: 3px;
+  background: var(--bg-2); margin-bottom: 12px;
+}
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { padding: 6px 14px; border: 1px solid var(--bg-3); border-radius: 3px;
+       font-size: 12px; cursor: pointer; background: var(--bg-2); color: var(--fg-0); }
+.btn:hover { color: var(--fg-0); background: var(--bg-3); }
+.btn-primary { background: var(--accent); color: var(--bg-0); border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { opacity: .88; }
+.btn-danger  { color: var(--danger); border-color: var(--bg-3); }
+.btn-danger:hover { background: var(--bg-3); }
+</style>
 </head>
 <body>
 <header>
@@ -2043,97 +2101,84 @@ pub const SETTINGS: &str = r##"<!DOCTYPE html>
     <a href="/queue">queue</a>
     <a href="/digests">digests</a>
     <a href="/history">history</a>
-    <a href="/settings" class="active">settings</a>
   </nav>
+  <a href="/settings" class="nav-cog active" title="settings">⚙</a>
 </header>
 <div class="page-layout">
 
-<section style="margin-bottom:32px">
-  <h2 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:16px">soundcloud account</h2>
-  <div id="sc-status" style="margin-bottom:16px;font-size:13px;color:var(--fg-2)">checking connection…</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a href="/auth/soundcloud"
-       style="display:inline-block;padding:7px 14px;background:var(--accent);color:var(--bg-0);border-radius:3px;font-size:13px;font-weight:600;text-decoration:none">
-      connect via oauth
-    </a>
+<!-- SoundCloud connection ------------------------------------------------- -->
+<section class="settings-section">
+  <h2>SoundCloud connection</h2>
+  <div id="sc-status-badge" class="status-badge" style="color:var(--fg-2)">checking…</div>
+
+  <div id="sc-oauth-row" style="display:none;margin-bottom:16px">
+    <a href="/auth/soundcloud" class="btn btn-primary">connect via OAuth</a>
+    <span style="font-size:12px;color:var(--fg-2);margin-left:8px">opens SoundCloud consent page</span>
   </div>
 
-  <div style="margin-top:24px">
-    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:8px">manual token</div>
-    <div style="font-size:12px;color:var(--fg-2);margin-bottom:8px">paste the <code>Authorization</code> header value from devtools (with or without the "OAuth " prefix)</div>
-    <div style="display:flex;gap:8px">
-      <input id="token-input" type="password" placeholder="OAuth 2-…"
-             style="flex:1;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--fg-0);padding:7px 10px;border-radius:3px;font-size:13px;font-family:monospace">
-      <button onclick="saveToken()" style="padding:7px 14px;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--fg-0);border-radius:3px;font-size:13px;cursor:pointer">save</button>
-      <button onclick="testToken()" style="padding:7px 14px;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--fg-0);border-radius:3px;font-size:13px;cursor:pointer">test</button>
-    </div>
-    <div id="token-msg" style="margin-top:8px;font-size:12px"></div>
+  <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2);margin-bottom:6px">manual token</div>
+  <div style="font-size:12px;color:var(--fg-2);margin-bottom:8px">
+    Paste the <code style="font-family:monospace;background:var(--bg-2);padding:1px 4px;border-radius:2px">Authorization</code>
+    header value from DevTools — with or without the "OAuth " prefix.
   </div>
+  <div class="btn-row">
+    <input id="token-input" type="password" placeholder="OAuth 2-…"
+           style="flex:1;min-width:0;font-family:monospace;font-size:12px">
+    <button class="btn btn-primary" onclick="saveToken()">save</button>
+    <button class="btn" onclick="testToken()">test</button>
+  </div>
+  <div id="token-msg" class="settings-msg"></div>
 </section>
 
-<section style="margin-bottom:32px">
-  <h2 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:16px">session</h2>
+<!-- Notifications --------------------------------------------------------- -->
+<section class="settings-section">
+  <h2>Notifications</h2>
+  <div style="font-size:12px;color:var(--fg-2);margin-bottom:12px">
+    crater can send a push notification via <a href="https://ntfy.sh" target="_blank" style="color:var(--accent)">ntfy</a>
+    when a digest run completes. Leave blank to disable.
+  </div>
+  <div class="settings-row">
+    <label>ntfy URL</label>
+    <input id="ntfy-url" type="text" placeholder="http://unraid.local:8090">
+  </div>
+  <div class="settings-row">
+    <label>topic</label>
+    <input id="ntfy-topic" type="text" placeholder="crater">
+  </div>
+  <div class="btn-row" style="margin-top:4px">
+    <button class="btn btn-primary" onclick="saveNtfy()">save</button>
+  </div>
+  <div id="ntfy-msg" class="settings-msg"></div>
+</section>
+
+<!-- Library --------------------------------------------------------------- -->
+<section class="settings-section">
+  <h2>Library</h2>
+  <div class="stat-grid" id="stat-grid">
+    <div class="stat-cell"><span class="stat-num" id="stat-total">—</span><span class="stat-label">total</span></div>
+    <div class="stat-cell"><span class="stat-num" id="stat-queued" style="color:var(--queued)">—</span><span class="stat-label">queued</span></div>
+    <div class="stat-cell"><span class="stat-num" id="stat-hearted" style="color:var(--accent)">—</span><span class="stat-label">hearted</span></div>
+    <div class="stat-cell"><span class="stat-num" id="stat-rejected" style="color:var(--danger)">—</span><span class="stat-label">rejected</span></div>
+    <div class="stat-cell"><span class="stat-num" id="stat-exported" style="color:var(--fg-2)">—</span><span class="stat-label">exported</span></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-danger" onclick="clearByStatus('rejected')">clear all rejected</button>
+    <button class="btn btn-danger" onclick="clearByStatus('exported')">clear all exported</button>
+  </div>
+  <div id="library-msg" class="settings-msg"></div>
+</section>
+
+<!-- Session --------------------------------------------------------------- -->
+<section class="settings-section">
+  <h2>Session</h2>
   <form method="post" action="/logout">
-    <button type="submit"
-            style="padding:7px 14px;background:var(--bg-2);border:1px solid var(--bg-3);color:var(--danger);border-radius:3px;font-size:13px;cursor:pointer">
-      log out
-    </button>
+    <button type="submit" class="btn btn-danger">log out</button>
   </form>
 </section>
 
 </div>
 <script>
-async function checkStatus() {
-  try {
-    const r = await fetch('/api/settings/sc-token/test');
-    const j = await r.json();
-    const el = document.getElementById('sc-status');
-    if (r.ok && j.status === 'ok') {
-      el.innerHTML = `connected as <strong style="color:var(--fg-0)">${esc(j.username)}</strong>`;
-      el.style.color = 'var(--green)';
-    } else {
-      el.textContent = j.error || 'not connected';
-      el.style.color = 'var(--fg-2)';
-    }
-  } catch {
-    document.getElementById('sc-status').textContent = 'could not reach server';
-  }
-}
-
-async function saveToken() {
-  const token = document.getElementById('token-input').value.trim();
-  const msg = document.getElementById('token-msg');
-  if (!token) { msg.textContent = 'enter a token first'; msg.style.color = 'var(--danger)'; return; }
-  const r = await fetch('/api/settings/sc-token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({token}),
-  });
-  const j = await r.json();
-  if (r.ok) {
-    msg.textContent = 'saved';
-    msg.style.color = 'var(--green)';
-    checkStatus();
-  } else {
-    msg.textContent = j.error || 'save failed';
-    msg.style.color = 'var(--danger)';
-  }
-}
-
-async function testToken() {
-  const msg = document.getElementById('token-msg');
-  msg.textContent = 'testing…';
-  msg.style.color = 'var(--fg-2)';
-  const r = await fetch('/api/settings/sc-token/test');
-  const j = await r.json();
-  if (r.ok && j.status === 'ok') {
-    msg.textContent = `ok — logged in as ${esc(j.username)}`;
-    msg.style.color = 'var(--green)';
-  } else {
-    msg.textContent = j.error || 'test failed';
-    msg.style.color = 'var(--danger)';
-  }
-}
+'use strict';
 
 function esc(s) {
   const d = document.createElement('div');
@@ -2141,7 +2186,126 @@ function esc(s) {
   return d.innerHTML;
 }
 
-checkStatus();
+function setMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.style.color = ok ? 'var(--green)' : ok === false ? 'var(--danger)' : 'var(--fg-2)';
+}
+
+// ── Load settings on page load ─────────────────────────────────────────────
+async function loadSettings() {
+  const [sr, tr] = await Promise.all([
+    fetch('/api/settings'),
+    fetch('/api/stats'),
+  ]);
+
+  // Settings
+  const s = await sr.json();
+  document.getElementById('ntfy-url').value   = s.ntfy_url   || '';
+  document.getElementById('ntfy-topic').value = s.ntfy_topic || '';
+
+  // OAuth button
+  if (s.pkce_configured) {
+    document.getElementById('sc-oauth-row').style.display = '';
+  }
+
+  // SC status badge
+  const badge = document.getElementById('sc-status-badge');
+  if (s.sc_token_stored) {
+    badge.textContent = 'token stored — test to verify';
+    badge.style.color = 'var(--fg-1)';
+  } else {
+    badge.textContent = 'no token stored';
+    badge.style.color = 'var(--fg-2)';
+  }
+
+  // Stats
+  if (tr.ok) {
+    const t = await tr.json();
+    document.getElementById('stat-total').textContent    = t.total;
+    document.getElementById('stat-queued').textContent   = t.queued;
+    document.getElementById('stat-hearted').textContent  = t.hearted;
+    document.getElementById('stat-rejected').textContent = t.rejected;
+    document.getElementById('stat-exported').textContent = t.exported;
+  }
+}
+
+// ── SC token ──────────────────────────────────────────────────────────────
+async function saveToken() {
+  const token = document.getElementById('token-input').value.trim();
+  if (!token) { setMsg('token-msg', 'enter a token first', false); return; }
+  const r = await fetch('/api/settings/sc-token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token}),
+  });
+  const j = await r.json();
+  if (r.ok) {
+    setMsg('token-msg', 'saved', true);
+    document.getElementById('sc-status-badge').textContent = 'token stored — test to verify';
+    document.getElementById('sc-status-badge').style.color = 'var(--fg-1)';
+    document.getElementById('token-input').value = '';
+  } else {
+    setMsg('token-msg', j.message || 'save failed', false);
+  }
+}
+
+async function testToken() {
+  setMsg('token-msg', 'testing…', null);
+  const r = await fetch('/api/settings/sc-token/test');
+  const j = await r.json();
+  if (r.ok && j.status === 'ok') {
+    setMsg('token-msg', `connected as ${esc(j.username)}`, true);
+    const badge = document.getElementById('sc-status-badge');
+    badge.innerHTML = `connected as <strong style="color:var(--fg-0)">${esc(j.username)}</strong>`;
+    badge.style.color = 'var(--green)';
+  } else {
+    setMsg('token-msg', j.message || 'test failed — token may be expired', false);
+  }
+}
+
+// ── ntfy ──────────────────────────────────────────────────────────────────
+async function saveNtfy() {
+  const ntfy_url   = document.getElementById('ntfy-url').value.trim();
+  const ntfy_topic = document.getElementById('ntfy-topic').value.trim();
+  const r = await fetch('/api/settings/ntfy', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ntfy_url, ntfy_topic}),
+  });
+  const j = await r.json();
+  setMsg('ntfy-msg', r.ok ? 'saved' : (j.message || 'save failed'), r.ok);
+}
+
+// ── Library ───────────────────────────────────────────────────────────────
+async function clearByStatus(status) {
+  const label = status === 'rejected' ? 'rejected' : 'exported';
+  if (!confirm(`Clear all ${label} tracks? This cannot be undone.`)) return;
+  setMsg('library-msg', `clearing ${label} tracks…`, null);
+  try {
+    const r    = await fetch(`/api/tracks?status=${status}`);
+    const list = await r.json();
+    for (const t of list) {
+      await fetch(`/api/tracks/${t.id}/status`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: null}),
+      });
+    }
+    setMsg('library-msg', `cleared ${list.length} ${label} tracks`, true);
+    // Refresh stats
+    const sr = await fetch('/api/stats');
+    if (sr.ok) {
+      const t = await sr.json();
+      document.getElementById('stat-rejected').textContent = t.rejected;
+      document.getElementById('stat-exported').textContent = t.exported;
+    }
+  } catch(e) {
+    setMsg('library-msg', 'error: ' + e.message, false);
+  }
+}
+
+loadSettings();
 </script>
 </body>
 </html>"##;

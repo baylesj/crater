@@ -43,8 +43,11 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/playlists/export",        post(playlists::export))
         .route("/api/stream/{id}",             get(stream::stream))
         .route("/api/stream/{id}/seg",         get(stream::segment))
+        .route("/api/settings",                get(settings::get_settings))
+        .route("/api/settings/ntfy",           post(settings::save_ntfy))
         .route("/api/settings/sc-token",       post(settings::save_sc_token))
         .route("/api/settings/sc-token/test",  get(settings::test_sc_token))
+        .route("/api/stats",                   get(settings::get_stats))
         // ── WebSocket ────────────────────────────────────────────────────────
         .route("/ws",                          get(ws::handler))
         // ── UI ───────────────────────────────────────────────────────────────
