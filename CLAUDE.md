@@ -14,54 +14,24 @@ container on the user's Unraid server.
 Named as a pun on the user's producer name (Chasma Sound). Also a
 verb: "to crater" = to dig deep.
 
-## Status as of session 1
+## Current status
 
-Design + scaffold complete. One crate is real code; the rest is
-design docs.
+All three crates are implemented and the server runs end-to-end.
 
-- `crates/sc_client/` — **implemented**, not yet compiled on a real
-  machine. The unofficial SoundCloud v2 API client. Scrapes
-  `client_id`, searches tracks with server-side filters (genre, BPM)
-  and client-side filters (play-count ceiling, likes floor), streams
-  paginated results through a callback. See its module docs.
-- `crates/core/` — **designed only**, see `docs/01-core-crate.md`.
-  SQLite schema, session/dedup logic, digest config, runner.
-- `crates/server/` — **designed only**, see `docs/02-server-api.md`.
-  axum HTTP API, WebSocket streaming, scheduler, audio proxy.
-- Web UI — **designed only**, see `docs/03-ui-design.md`. HTMX +
-  Askama, three-column dig view, keyboard-first.
-- OAuth capture flow — **documented**, see `docs/04-oauth-capture.md`.
-  User-facing instructions for grabbing the SoundCloud token from
-  DevTools.
+- `crates/sc_client/` — **implemented**. Unofficial SoundCloud v2
+  API client. Scrapes `client_id`, searches tracks with server-side
+  filters (genre, BPM) and client-side filters (play-count ceiling,
+  likes floor). Also has OAuth PKCE support and playlist CRUD.
+- `crates/core/` — **implemented**. SQLite schema via sqlx migrations,
+  `Crater` facade, track upsert/status, session streaming, digest
+  CRUD, digest runner, HLS stream URL resolution, kv store.
+- `crates/server/` — **implemented**. axum HTTP API, HTMX + Askama
+  UI, WebSocket live updates, audio proxy, scheduler, settings page,
+  optional app password auth, SoundCloud PKCE OAuth flow.
 
-## First session priorities
-
-In order:
-
-1. **Verify `sc_client` compiles.** Run `cargo check -p sc_client`.
-   Fix any typos/imports. The code was written without a compiler
-   available, so 0-2 small fixes are plausible.
-2. **Run the smoke test.** `cargo run -p sc_client --example
-   search_demo`. Should print ~20 low-play drum & bass tracks.
-   - If `client_id` extraction fails, SoundCloud has likely shipped
-     a new bundle format; the regex in `src/client_id.rs` needs
-     updating. Fetch `https://soundcloud.com` manually, find the
-     current asset URL pattern, adjust.
-   - If the search URL shape is wrong (e.g. `filter.genre_or_tag`
-     param name has changed), inspect a real v2 request in browser
-     DevTools and align.
-3. **Run the unit tests.** `cargo test -p sc_client`.
-4. **Run the live integration tests** (optional, hits real
-   SoundCloud). `cargo test -p sc_client --features live-tests --
-   --nocapture`.
-5. **Start on `core`.** Add `core` to the workspace members in the
-   root `Cargo.toml`. Implement per `docs/01-core-crate.md`, in this
-   order:
-   a. `db.rs` + migrations + `Crater::new`
-   b. `tracks.rs` — upsert, set_status, get_track
-   c. `session.rs` — the streaming search + dedup primitive
-   d. `digests.rs` + `digest_runner.rs`
-   Integration tests against in-memory SQLite as you go.
+The server can be run today with `just dev` or `cargo run -p crater`.
+Playlist export works once a SoundCloud OAuth token is in place (either
+via the built-in PKCE flow or by pasting a token in Settings).
 
 ## Architecture cheatsheet
 
@@ -145,10 +115,6 @@ User's browser (LAN)
 
 - Don't switch the stack. HTMX, sqlx, axum are decided. If a
   better option comes up, flag it but don't pre-emptively rewrite.
-- Don't implement playlist CRUD in `sc_client` before we have an
-  OAuth token captured. It's the last thing to build; the user
-  needs to do the DevTools capture flow first (see
-  `docs/04-oauth-capture.md`).
 - Don't add track acquisition logic in v1. Schema makes space for
   it; implementation is deferred.
 - Don't suggest moving to Cowork or other tools. Claude Code is
@@ -158,56 +124,63 @@ User's browser (LAN)
 - Don't add dependencies without a reason. The stack was chosen to
   stay slim.
 
-## Open questions flagged in the design docs
+## Open questions / deferred decisions
 
-Each doc has an "Open questions" section at the bottom listing
-choices that went with a default but could go either way. When you
-hit one during implementation, re-read it and either (a) go with
-the documented default or (b) surface the tradeoff for discussion.
-Don't silently pick the other option.
-
-Notable ones:
-- Cron timezone storage (docs/01) — current plan: separate
-  `timezone` column, default `America/Los_Angeles`.
-- Session state in-memory vs DB (docs/02) — current plan:
-  in-memory hashmap with 5min TTL.
+- Waveform rendering (docs/03) — v1 uses SoundCloud's PNG. v2 would
+  be Web Audio decoded. Not implemented yet.
+- Continuous autoplay (docs/03) — v1 stops at end of track. Not
+  implemented yet.
 - Rate-limit retry policy (docs/02) — current plan: one retry with
-  30s backoff, then surface.
-- Waveform rendering approach (docs/03) — v1: SoundCloud's PNG.
-  v2: Web Audio decoded.
-- Continuous autoplay (docs/03) — v1: stop at end of track.
+  30s backoff, then surface. Check `digest_runner.rs` for current
+  behavior.
+- Docker packaging — the server works locally; multi-stage Dockerfile
+  for Unraid has not been written yet.
 
 ## Running the project
 
 ```sh
-# Verify sc_client
-cargo check -p sc_client
-cargo test -p sc_client
+# Start the server with local dev defaults (data in ./data, debug logging)
+just dev
+# or manually:
+cargo run -p crater
 
-# Run the search demo (requires network)
-cargo run -p sc_client --example search_demo
+# Type-check the whole workspace
+just check
+
+# All non-live tests
+just test
+
+# Server smoke tests (real server, no SC network)
+just test-smoke
 
 # Live integration tests (hits real SoundCloud)
-cargo test -p sc_client --features live-tests -- --nocapture
+just test-live
+just test-client-live
 
-# Once core exists:
-cargo check -p core
-cargo test -p core
-
-# Once server exists:
-cargo run -p server
+# sc_client search demo
+cargo run -p sc_client --example search_demo
 ```
 
-Env vars (will matter once `server` exists):
+Env vars:
 
 ```
-CRATER_BIND=0.0.0.0:8080
-CRATER_DATA_DIR=/data
-CRATER_SC_OAUTH_TOKEN=<from DevTools capture, see docs/04>
-CRATER_NTFY_URL=http://unraid.local:8090  # optional
-CRATER_NTFY_TOPIC=crater                  # optional
-CRATER_TIMEZONE=America/Los_Angeles
-CRATER_LOG=server=info,core=info,sc_client=info
+CRATER_BIND=0.0.0.0:8080           # default
+CRATER_DATA_DIR=/data              # where crater.db lives
+CRATER_PASSWORD=<secret>           # optional: gate the whole UI with a password
+
+# Official SoundCloud API (get from https://soundcloud.com/you/apps)
+# If absent, falls back to scraping a client_id from SC's homepage.
+CRATER_SC_CLIENT_ID=<id>
+CRATER_SC_CLIENT_SECRET=<secret>
+CRATER_REDIRECT_URI=http://localhost:8080/auth/soundcloud/callback
+
+# Fallback: manually captured OAuth token (Settings page or DevTools)
+CRATER_SC_OAUTH_TOKEN=<token>
+
+CRATER_NTFY_URL=http://unraid.local:8090   # optional push notifications
+CRATER_NTFY_TOPIC=crater                   # optional
+CRATER_TIMEZONE=America/Los_Angeles        # default
+CRATER_LOG=crater=info,crater_core=info,sc_client=info
 ```
 
 ## Deployment target

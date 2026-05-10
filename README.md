@@ -9,63 +9,83 @@ tracks that aren't already on every curated playlist.
 
 ## Status
 
-**Pre-alpha.** Session 1: `sc_client` crate. Search works, filtering
-works, nothing else yet. See `docs/` for design specs of what comes next.
+**Alpha.** All three crates are implemented and the server runs end-to-end.
+Search, track triage, digest scheduling, audio playback, and playlist
+export all work.
 
 ## Architecture
 
 ```
 crates/
-├── sc_client/   SoundCloud v2 API client  (implemented)
-├── core/        Business logic + SQLite   (designed — see docs/01)
-└── server/      axum + HTMX UI            (designed — see docs/02, 03)
+├── sc_client/   SoundCloud v2 API client + playlist CRUD
+├── core/        SQLite data layer, session streaming, digest runner
+└── server/      axum HTTP API, HTMX + Askama UI, WebSocket, scheduler
+```
+
+## Running locally
+
+```sh
+# Install just (brew install just), then:
+just dev
+```
+
+Open `http://localhost:8080` in a browser. The server creates `./data/crater.db`
+on first run and scrapes a SoundCloud `client_id` automatically if no official
+API credentials are configured.
+
+For playlist export, either paste an OAuth token in **Settings** or configure
+the official API credentials (see env vars below) to use the built-in PKCE flow.
+
+## Environment variables
+
+```
+CRATER_BIND=0.0.0.0:8080           # default
+CRATER_DATA_DIR=/data
+
+# Optional: password-protect the UI (recommended if exposed beyond LAN)
+CRATER_PASSWORD=<secret>
+
+# Official SoundCloud API (enables PKCE OAuth flow; falls back to scraping if absent)
+CRATER_SC_CLIENT_ID=<id>
+CRATER_SC_CLIENT_SECRET=<secret>
+CRATER_REDIRECT_URI=http://localhost:8080/auth/soundcloud/callback
+
+# Fallback: manually captured OAuth token (paste in Settings page)
+CRATER_SC_OAUTH_TOKEN=<token>
+
+CRATER_NTFY_URL=http://unraid.local:8090   # optional push notifications
+CRATER_NTFY_TOPIC=crater
+CRATER_TIMEZONE=America/Los_Angeles
+CRATER_LOG=crater=info,crater_core=info,sc_client=info
+```
+
+## Tests
+
+```sh
+just test            # all non-live tests
+just test-smoke      # server smoke tests (no network)
+just test-live       # hits real SoundCloud
 ```
 
 ## Documentation
 
-- [docs/](docs/) — full design specs for all crates
-- [docs/04-oauth-capture.md](docs/04-oauth-capture.md) — one-time setup
-  to enable playlist export
-
-## Running the smoke test
-
-```sh
-cd /path/to/crater
-cargo run -p sc_client --example search_demo
-```
-
-First run scrapes SoundCloud for a `client_id` (~2s), subsequent runs in
-the same process are instant. You should see ~20 drum & bass tracks
-with under 1000 plays printed to stdout with their URLs.
-
-To tweak the query, edit the `SearchFilters` in
-`crates/sc_client/examples/search_demo.rs`.
-
-## Running unit tests
-
-```sh
-cargo test -p sc_client
-```
-
-## Running live integration tests
-
-These hit the real SoundCloud API and are gated behind a feature flag:
-
-```sh
-cargo test -p sc_client --features live-tests -- --nocapture
-```
+- [docs/](docs/) — design specs for all crates
+- [docs/04-oauth-capture.md](docs/04-oauth-capture.md) — OAuth token setup
 
 ## Roadmap
 
 - [x] `sc_client`: client_id scraping, search, client-side filters
-- [ ] `sc_client`: playlist CRUD (needs OAuth token)
-- [ ] `core`: SQLite cache, seen/rejected tracking
-- [ ] `core`: digest definitions + scheduler
-- [ ] `server`: axum HTTP API
-- [ ] `server`: HTMX + Askama UI
+- [x] `sc_client`: playlist CRUD, OAuth PKCE support
+- [x] `core`: SQLite cache, seen/rejected/hearted/exported tracking
+- [x] `core`: digest definitions + scheduler
+- [x] `server`: axum HTTP API
+- [x] `server`: HTMX + Askama UI (search, queue, digests, settings)
+- [x] `server`: audio streaming (HLS proxy), WebSocket live updates
+- [x] `server`: app password auth + SoundCloud PKCE OAuth flow
 - [ ] Docker + Unraid deploy
 - [ ] Track acquisition (yt-dlp subprocess)
 - [ ] Web Audio API features (waveform, A/B preview)
+- [ ] Continuous autoplay
 
 ## Ethical scope
 
