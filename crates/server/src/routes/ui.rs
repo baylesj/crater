@@ -31,23 +31,40 @@ pub async fn settings_page()    -> Html<String> { Html(SETTINGS.replace("/* CSS_
 
 const CSS: &str = r##"
 :root {
-  --bg-0: #0f1013; --bg-1: #171920; --bg-2: #1f222b; --bg-3: #2a2e38;
-  --fg-0: #e8ebf0; --fg-1: #a0a6b0; --fg-2: #5c6370;
-  --accent: #c9ad7f;
-  --queued: #7fb383;
-  --green:  #7fb383;
-  --danger: #c06970;
-  --bpm:    #7fa3b3;
-  --sel:    #252830;
+  --bg-0: #0a0b0f; --bg-1: #14161d; --bg-2: #1e222c; --bg-3: #2d323f;
+  --fg-0: #eef1f7; --fg-1: #9aa2b0; --fg-2: #616977;
+  --accent: #e6b366;
+  --accent-glow: rgba(230,179,102,.20);
+  --queued: #84c490;
+  --green:  #84c490;
+  --danger: #d27b82;
+  --bpm:    #84a9c6;
+  --sel:    #20242f;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.45);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
   background: var(--bg-0);
+  background-image: radial-gradient(130% 80% at 50% -15%, #16181f 0%, var(--bg-0) 58%);
   color: var(--fg-0);
   font: 13px/1.5 system-ui, -apple-system, sans-serif;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scrollbar-color: var(--bg-3) transparent;
 }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #3a4150; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+kbd {
+  font: 11px/1 ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  background: var(--bg-2); border: 1px solid var(--bg-3); border-bottom-width: 2px;
+  border-radius: 3px; padding: 1px 4px; color: var(--fg-1);
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--fg-0); }
 button {
@@ -63,31 +80,43 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 input, select {
   background: var(--bg-2);
-  border: 1px solid var(--bg-2);
+  border: 1px solid var(--bg-3);
   color: var(--fg-0);
   padding: 5px 8px;
-  border-radius: 3px;
+  border-radius: 4px;
   font: 13px/1.4 system-ui, sans-serif;
   width: 100%;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+input:hover, select:hover { border-color: #353b48; }
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 input::placeholder { color: var(--fg-2); }
 
 /* ── header ──────────────────────────────────────────────────────────────── */
 header {
-  height: 38px;
-  background: var(--bg-1);
+  height: 44px;
+  background: linear-gradient(180deg, var(--bg-1), #101218);
   border-bottom: 1px solid var(--bg-2);
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
   display: flex;
   align-items: center;
   padding: 0 16px;
   gap: 20px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
 }
-.logo { font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--accent); }
+.logo {
+  font-size: 16px; font-weight: 800; letter-spacing: .14em;
+  background: linear-gradient(180deg, #ecd4a8, var(--accent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 20px var(--accent-glow);
+}
 nav { display: flex; gap: 14px; }
-nav a { font-size: 12px; color: var(--fg-1); padding: 3px 0; border-bottom: 2px solid transparent; }
-nav a:hover, nav a.active { color: var(--fg-0); border-bottom-color: var(--accent); }
+nav a { font-size: 12px; color: var(--fg-1); padding: 3px 0; border-bottom: 2px solid transparent;
+        transition: color .15s ease, border-color .15s ease; }
+nav a:hover { color: var(--fg-0); }
+nav a.active { color: var(--fg-0); border-bottom-color: var(--accent); }
 .nav-badge { font-size: 10px; background: var(--bg-2); border-radius: 10px; padding: 1px 5px;
              color: var(--fg-2); margin-left: 3px; font-variant-numeric: tabular-nums; }
 .nav-cog { margin-left: auto; font-size: 20px; color: var(--fg-2);
@@ -98,7 +127,7 @@ nav a:hover, nav a.active { color: var(--fg-0); border-bottom-color: var(--accen
 .dig-layout {
   display: grid;
   grid-template-columns: 220px 1fr;
-  height: calc(100vh - 38px);
+  height: calc(100vh - 44px);
   overflow: hidden;
 }
 .dig-layout.has-playing { grid-template-columns: 220px 1fr 280px; }
@@ -106,33 +135,46 @@ nav a:hover, nav a.active { color: var(--fg-0); border-bottom-color: var(--accen
 /* ── filter sidebar ──────────────────────────────────────────────────────── */
 #filters {
   overflow-y: auto;
-  padding: 14px 12px;
+  padding: 16px 14px;
   border-right: 1px solid var(--bg-2);
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-0) 240px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 11px;
 }
 .filter-label {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--fg-2);
-  margin-bottom: 4px;
+  letter-spacing: .09em;
+  color: var(--fg-1);
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-label::before {
+  content: '';
+  width: 5px; height: 5px; border-radius: 1px;
+  background: var(--accent); opacity: .6; flex-shrink: 0;
 }
 .filter-group { display: flex; flex-direction: column; }
 .filter-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .filter-actions { display: flex; gap: 6px; margin-top: 4px; }
 .btn-primary {
-  background: var(--accent); color: var(--bg-0); border-radius: 3px;
+  background: linear-gradient(180deg, #e3c597, var(--accent)); color: #1a1407; border-radius: 4px;
   padding: 6px 12px; font-size: 12px; font-weight: 600; flex: 1;
+  box-shadow: var(--shadow-sm);
+  transition: filter .15s ease, transform .06s ease;
 }
-.btn-primary:hover { opacity: .88; }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-primary:active { transform: translateY(1px); }
 .btn-secondary {
-  background: var(--bg-2); color: var(--fg-1); border-radius: 3px;
-  padding: 6px 10px; font-size: 12px;
+  background: var(--bg-2); color: var(--fg-1); border-radius: 4px;
+  padding: 6px 10px; font-size: 12px; border: 1px solid var(--bg-3);
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
 }
-.btn-secondary:hover { color: var(--fg-0); }
+.btn-secondary:hover { color: var(--fg-0); background: var(--bg-3); }
 hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 
 /* ── results column ──────────────────────────────────────────────────────── */
@@ -167,10 +209,12 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
   border-bottom: 1px solid var(--bg-2);
   cursor: pointer;
   align-items: start;
+  position: relative;
+  transition: background .12s ease, box-shadow .12s ease;
 }
 .track:hover    { background: var(--bg-1); }
-.track.selected { background: var(--sel); }
-.track.playing  { background: var(--sel); }
+.track.selected { background: var(--sel); box-shadow: inset 2px 0 0 var(--accent); }
+.track.playing  { background: var(--sel); box-shadow: inset 2px 0 0 var(--accent); }
 .track.status-queued  { background: rgba(127,179,131,.07); }
 .track.status-hearted { background: rgba(201,173,127,.07); }
 .track.status-rejected { opacity: .45; }
@@ -246,11 +290,12 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 /* ── track artwork thumbnail ────────────────────────────────────────────── */
 .track-art {
   width: 36px; height: 36px;
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
   background: var(--bg-2);
   flex-shrink: 0;
   align-self: center;
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px rgba(255,255,255,.04);
 }
 .track-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .track-art-placeholder {
@@ -277,9 +322,10 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 .np-art {
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 3px;
+  border-radius: 5px;
   overflow: hidden;
   background: var(--bg-2);
+  box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255,255,255,.05);
 }
 .np-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .np-art:empty { display: none; }
@@ -287,22 +333,35 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 .np-waveform {
   height: 56px;
   background: var(--bg-2);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
   position: relative;
 }
-/* Placeholder bars to suggest a waveform until we have real data */
-.np-waveform::after {
+/* Placeholder bars to suggest a waveform until we have real data. The radial
+   mask fades the bars toward the edges so the block reads as a wave shape. */
+.np-waveform::before {
   content: '';
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(
     90deg,
-    transparent 0px, transparent 2px,
-    var(--bg-0) 2px, var(--bg-0) 3px
+    var(--accent) 0px, var(--accent) 2px,
+    transparent 2px, transparent 4px
   );
-  opacity: .3;
+  -webkit-mask-image: radial-gradient(120% 135% at 50% 125%, #000 28%, transparent 76%);
+          mask-image: radial-gradient(120% 135% at 50% 125%, #000 28%, transparent 76%);
+  opacity: .34;
 }
+/* A slow shimmer sweep to hint that audio is live until real waveforms land. */
+.np-waveform::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+  transform: translateX(-100%);
+  animation: wf-sweep 2.6s ease-in-out infinite;
+}
+@keyframes wf-sweep { to { transform: translateX(100%); } }
 
 .np-scrubber-row {
   display: flex;
@@ -395,7 +454,7 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 
 /* ── generic page layout (queue, digests) ────────────────────────────────── */
 .page-layout {
-  height: calc(100vh - 38px);
+  height: calc(100vh - 44px);
   overflow-y: auto;
   padding: 20px 24px;
   max-width: 900px;
@@ -414,10 +473,12 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 .card {
   background: var(--bg-1);
   border: 1px solid var(--bg-2);
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 12px 16px;
   margin-bottom: 8px;
+  transition: border-color .15s ease, background .15s ease;
 }
+.card:hover { border-color: var(--bg-3); background: #161922; }
 .card-title { font-size: 13px; font-weight: 500; }
 .card-meta  { font-size: 11px; color: var(--fg-2); margin-top: 4px;
               font-family: monospace; font-variant-numeric: tabular-nums; }
