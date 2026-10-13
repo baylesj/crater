@@ -132,6 +132,17 @@ pub struct User {
     pub followers_count: Option<u64>,
     #[serde(default)]
     pub avatar_url: Option<String>,
+
+    /// Tracks this user has liked. The crawler uses it to tell curators
+    /// (hundreds of likes) from people who like everything they hear.
+    #[serde(default)]
+    pub likes_count: Option<u64>,
+    #[serde(default)]
+    pub followings_count: Option<u64>,
+    #[serde(default)]
+    pub track_count: Option<u64>,
+    #[serde(default)]
+    pub reposts_count: Option<u64>,
 }
 
 /// The shape of a paginated v2 search response. `next_href` is a

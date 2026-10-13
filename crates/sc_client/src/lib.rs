@@ -10,6 +10,9 @@
 //! - Paginates v2 responses and streams filtered results page-by-page via
 //!   a callback, so UIs can render progressively rather than block.
 //!
+//! - Walks the social graph around a track: who liked and reposted it,
+//!   and what those people liked and reposted (`graph` module).
+//!
 //! ## Does not (yet)
 //! - Playlist CRUD — needs a user OAuth token, which requires a manual
 //!   auth step. Will live in a separate `playlist` module in a later pass.
@@ -24,6 +27,7 @@
 mod client;
 mod client_id;
 mod error;
+mod graph;
 pub mod oauth;
 pub mod playlist;
 mod types;

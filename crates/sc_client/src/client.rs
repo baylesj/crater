@@ -17,7 +17,7 @@ use crate::error::{Result, ScError};
 use crate::oauth::{client_credentials, CachedToken, OAuthConfig};
 use crate::types::{SearchFilters, SearchResponse, SortBy, Track};
 
-const API_BASE: &str = "https://api-v2.soundcloud.com";
+pub(crate) const API_BASE: &str = "https://api-v2.soundcloud.com";
 
 /// Response from a transcoding resolution request: `{"url": "<cdn_url>"}`.
 #[derive(serde::Deserialize)]
@@ -96,7 +96,7 @@ impl Client {
     /// Returns a valid `client_id` (official mode) or scraped id (fallback),
     /// refreshing/scraping as needed. This is what all API calls use for the
     /// `client_id=` query parameter.
-    async fn get_client_id(&self) -> Result<String> {
+    pub(crate) async fn get_client_id(&self) -> Result<String> {
         if let Some(cfg) = &self.oauth_cfg {
             // Official mode: use/refresh the client credentials token.
             return self.get_cc_token(cfg).await;
@@ -300,7 +300,7 @@ impl Client {
 
     /// Perform a GET and deserialize as JSON, with automatic retry once on
     /// 401 (refresh client_id and try again). Other errors bubble up.
-    async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
+    pub(crate) async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
         match self.get_json_once(url).await {
             Err(ScError::AuthExpired) => {
                 tracing::warn!("client_id rejected, refreshing and retrying");
