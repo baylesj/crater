@@ -256,6 +256,10 @@ hr.rule { border: none; border-top: 1px solid var(--bg-2); }
 .track-artist { font-size: 12px; color: var(--fg-1); flex-shrink: 0; }
 .track-artist:hover { color: var(--fg-0); text-decoration: underline; }
 
+.track-via a { color: var(--fg-1); }
+.track-via a:hover { color: var(--accent); text-decoration: underline; }
+.filter-hint { font-size: 11px; color: var(--fg-2); margin-top: 4px; line-height: 1.4; }
+
 .track-meta, .track-meta2 {
   font-size: 11px;
   color: var(--fg-2);
@@ -522,6 +526,12 @@ const DIG: &str = r##"<!DOCTYPE html>
   <!-- FILTER SIDEBAR -->
   <aside id="filters">
     <div class="filter-group">
+      <div class="filter-label">crawl</div>
+      <button class="btn-primary" onclick="startDig()" title="dig from hearts [g]">dig from hearts</button>
+      <div class="filter-hint">likers of your hearted tracks, and what else they like</div>
+    </div>
+    <hr class="rule">
+    <div class="filter-group">
       <div class="filter-label">query</div>
       <input id="f-query" type="text" placeholder="liquid, neurofunk, …"
              onkeydown="if(event.key==='Enter') startSearch()">
@@ -722,6 +732,7 @@ const DIG: &str = r##"<!DOCTYPE html>
     <div class="help-row"><span class="help-key">n</span><span>reject selected</span></div>
     <div class="help-row"><span class="help-key">h</span><span>heart selected</span></div>
     <div class="help-row"><span class="help-key">o</span><span>open on SoundCloud</span></div>
+    <div class="help-row"><span class="help-key">g</span><span>dig from hearts</span></div>
     <div class="help-row"><span class="help-key">/</span><span>focus search input</span></div>
     <div class="help-row"><span class="help-key">Esc</span><span>blur input / close help</span></div>
     <div class="help-close"><button onclick="hideHelp()">close</button></div>
@@ -839,7 +850,8 @@ function applyQuery(idx) {
 // ── WebSocket ──────────────────────────────────────────────────────────────────
 function ensureWS() {
   if (ws && ws.readyState < 2) return;
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${scheme}://${location.host}/ws`);
   ws.onopen    = () => console.debug('WS open');
   ws.onclose   = () => console.debug('WS closed');
   ws.onerror   = e  => console.warn('WS error', e);
@@ -850,7 +862,59 @@ function ensureWS() {
     if (msg.type === 'search.track')    onTrack(msg);
     if (msg.type === 'search.complete') onComplete(msg);
     if (msg.type === 'search.error')    onSearchError(msg);
+    if (msg.type === 'dig.progress')    onDigProgress(msg);
   };
+}
+
+// ── Dig (graph crawl) ─────────────────────────────────────────────────────────
+let digging = false;
+
+async function startDig() {
+  if (digging) return;
+  ensureWS();
+  tracks = [];
+  selectedIdx = -1;
+  nowPlayingIdx = -1;
+  digging = true;
+  document.getElementById('track-list').innerHTML = '';
+  document.getElementById('status-counts').textContent = '';
+  document.getElementById('layout').classList.remove('has-playing');
+  resetAudio();
+  setStatus('digging: reading likers of your hearted tracks…');
+
+  let resp;
+  try {
+    resp = await fetch('/api/dig', {method: 'POST'});
+  } catch (e) {
+    setStatus('network error: ' + e.message);
+    digging = false;
+    return;
+  }
+  if (resp.status === 409) { setStatus('a dig is already running'); digging = false; return; }
+  if (!resp.ok) { setStatus('server error ' + resp.status); digging = false; return; }
+
+  const { session_id } = await resp.json();
+  sessionId = session_id;
+  const sub = () => ws.send(JSON.stringify({type:'subscribe', channel:'search', session_id}));
+  if (ws.readyState === 1) sub();
+  else ws.addEventListener('open', sub, {once: true});
+}
+
+function onDigProgress({progress: p}) {
+  const what = p.phase === 'seeds'    ? `reading likers of seed ${p.done + 1}/${p.total}`
+             : p.phase === 'curators' ? `reading curator ${p.done + 1}/${p.total}`
+             : 'scoring';
+  setStatus(`digging: ${what}`);
+  document.getElementById('status-counts').textContent = `${p.requests} requests`;
+}
+
+function digLine(d) {
+  const names = d.via.map(v => v.permalink_url
+    ? `<a href="${esc(v.permalink_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(v.username || '?')}</a>`
+    : esc(v.username || '?'));
+  const more = d.support > d.via.length ? ` +${d.support - d.via.length}` : '';
+  const because = d.because.length ? ` · because ${d.because.map(esc).join(' / ')}` : '';
+  return `via ${names.join(', ')}${more}${because}`;
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -915,9 +979,10 @@ async function startSearch() {
   else ws.addEventListener('open', sub, {once: true});
 }
 
-function onTrack({track, total_scanned, pages_scanned}) {
+function onTrack({track, total_scanned, pages_scanned, dig}) {
   pagesScanned = pages_scanned;
   totalScanned = total_scanned;
+  if (dig) track._dig = dig;
   // Skip tracks already processed in a previous session
   if (track.status && ['hearted','queued','rejected','exported'].includes(track.status)) return;
   const idx = tracks.length;
@@ -929,6 +994,16 @@ function onTrack({track, total_scanned, pages_scanned}) {
 
 function onComplete({exhausted, total_accepted, total_scanned, pages_scanned}) {
   searching = false;
+  if (digging) {
+    digging = false;
+    const cut = exhausted ? '' : ' · rate limited, partial graph';
+    setStatus(total_accepted
+      ? `${total_accepted} tracks from ${total_scanned} candidates${cut}`
+      : 'no candidates: heart a few tracks first, then dig');
+    document.getElementById('status-counts').textContent = '';
+    refreshQueueCount();
+    return;
+  }
   // Update final counts — only reach the client via Track events when tracks
   // are emitted; pick up the definitive numbers from Complete instead.
   if (total_scanned != null) totalScanned = total_scanned;
@@ -951,6 +1026,7 @@ function onComplete({exhausted, total_accepted, total_scanned, pages_scanned}) {
 
 function onSearchError({message}) {
   searching = false;
+  digging = false;
   setStatus('search error: ' + message);
 }
 
@@ -1004,6 +1080,7 @@ function cardHtml(t, idx) {
     </div>
     <div class="track-meta">${meta1}</div>
     <div class="track-meta2">${meta2}</div>
+    ${t._dig ? `<div class="track-meta2 track-via">${digLine(t._dig)}</div>` : ''}
   </div>
   <div class="track-actions" onclick="event.stopPropagation()">
     <button class="act-queue"  onclick="act(${t.id},'queued')"   title="queue [y]">✓</button>
@@ -1202,6 +1279,7 @@ document.addEventListener('keydown', e => {
         window.open(tracks[idx].permalink_url, '_blank', 'noopener');
       break;
     case '/': e.preventDefault(); document.getElementById('f-query').focus(); break;
+    case 'g': startDig(); break;
     case '?': showHelp(); break;
     case 'Escape': hideHelp(); break;
   }

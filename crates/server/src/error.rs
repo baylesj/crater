@@ -13,6 +13,9 @@ pub enum AppError {
     #[error("bad request: {0}")]
     BadRequest(String),
 
+    #[error("conflict: {0}")]
+    Conflict(String),
+
     #[error("service unavailable: {0}")]
     #[allow(dead_code)]
     ServiceUnavailable(String),
@@ -29,6 +32,7 @@ impl IntoResponse for AppError {
         let (status, code) = match &self {
             AppError::NotFound                 => (StatusCode::NOT_FOUND,            "not_found"),
             AppError::BadRequest(_)            => (StatusCode::BAD_REQUEST,          "bad_request"),
+            AppError::Conflict(_)              => (StatusCode::CONFLICT,             "conflict"),
             AppError::ServiceUnavailable(_)    => (StatusCode::SERVICE_UNAVAILABLE,  "service_unavailable"),
             AppError::Core(CoreError::NotFound) => (StatusCode::NOT_FOUND,           "not_found"),
             AppError::Core(CoreError::InvalidCron { .. }) => (StatusCode::BAD_REQUEST, "invalid_cron"),

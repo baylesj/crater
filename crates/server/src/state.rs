@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use crater_core::{Crater, StoredTrack};
+use crater_core::{Crater, DigProgress, StoredTrack, Via};
 use crate::config::Config;
 
 const SESSION_TTL: Duration = Duration::from_secs(5 * 60);
@@ -31,6 +31,10 @@ pub struct AppState {
     pub digest_events: broadcast::Sender<DigestEvent>,
     /// Server config — needed by auth middleware and OAuth routes.
     pub config:        Config,
+    /// Held for the duration of a graph crawl. One at a time: a dig makes a
+    /// couple of hundred SoundCloud requests, and two in parallel would only
+    /// fetch the same lists twice.
+    pub dig_lock:      Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -41,6 +45,7 @@ impl AppState {
             sessions:      Arc::new(RwLock::new(HashMap::new())),
             digest_events,
             config,
+            dig_lock:      Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 }
@@ -103,6 +108,15 @@ pub enum SearchEvent {
         track:         StoredTrack,
         total_scanned: u32,
         pages_scanned: u32,
+        /// Why a dig picked this track. Absent for keyword search.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dig:           Option<DigMeta>,
+    },
+    /// Crawl progress, sent between phases of a dig.
+    #[serde(rename = "dig.progress")]
+    DigProgress {
+        session_id: Uuid,
+        progress:   DigProgress,
     },
     /// Search finished normally.
     #[serde(rename = "search.complete")]
@@ -123,6 +137,14 @@ pub enum SearchEvent {
         error:      String,
         message:    String,
     },
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DigMeta {
+    pub score:   f64,
+    pub support: usize,
+    pub via:     Vec<Via>,
+    pub because: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

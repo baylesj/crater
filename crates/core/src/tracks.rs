@@ -101,7 +101,10 @@ impl StoredTrack {
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
-pub async fn upsert_track(pool: &SqlitePool, track: &sc_client::Track) -> Result<()> {
+pub async fn upsert_track<'c, E>(db: E, track: &sc_client::Track) -> Result<()>
+where
+    E: sqlx::Executor<'c, Database = sqlx::Sqlite>,
+{
     let raw_json      = serde_json::to_string(track)?;
     let artist        = track.user.as_ref().and_then(|u| u.username.as_deref());
     let artist_sc_id  = track.user.as_ref().map(|u| u.id as i64);
@@ -151,7 +154,7 @@ pub async fn upsert_track(pool: &SqlitePool, track: &sc_client::Track) -> Result
     .bind(artwork_url)
     .bind(track.created_at.as_deref())
     .bind(&raw_json)
-    .execute(pool)
+    .execute(db)
     .await?;
 
     Ok(())

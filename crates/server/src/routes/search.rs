@@ -78,6 +78,7 @@ pub async fn start(
                     track,
                     total_scanned,
                     pages_scanned,
+                    dig: None,
                 });
             });
         }).await;

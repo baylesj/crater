@@ -12,6 +12,7 @@ pub use sc_client;
 pub use sc_client::{SearchFilters, Track};
 
 pub mod db;
+pub mod dig;
 pub mod digest_runner;
 pub mod digests;
 pub mod error;
@@ -29,6 +30,7 @@ pub struct TrackStats {
     pub rejected: i64,
     pub exported: i64,
 }
+pub use dig::{DigOutcome, DigParams, DigPhase, DigProgress, DigResult, Via};
 pub use digests::{Digest, DigestRunRow, DigestSpec, PlaylistVisibility};
 pub use error::{CoreError, Result};
 pub use filters::Ranking;
@@ -234,6 +236,17 @@ impl Crater {
 
     pub fn new_session(&self, filters: sc_client::SearchFilters) -> Session {
         Session::new(filters, self.db.clone(), self.sc.clone())
+    }
+
+    // ── Graph crawl ─────────────────────────────────────────────────────
+
+    /// Find tracks through the likers and reposters of positive tracks.
+    /// See `dig` for the algorithm.
+    pub async fn dig<F>(&self, params: &DigParams, on_progress: F) -> Result<DigOutcome>
+    where
+        F: FnMut(DigProgress),
+    {
+        dig::dig(&self.db, &self.sc, params, on_progress).await
     }
 
     // ── Digest CRUD ──────────────────────────────────────────────────────

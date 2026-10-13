@@ -1,5 +1,6 @@
 //! Route registration. Called from `main.rs` to assemble the axum Router.
 
+pub mod dig;
 pub mod digests;
 pub mod playlists;
 pub mod search;
@@ -33,6 +34,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/health",                  get(health))
         .route("/api/search",                  post(search::start))
         .route("/api/search/{id}",             get(search::poll))
+        .route("/api/dig",                     post(dig::start))
         .route("/api/tracks",                  get(tracks::list))
         .route("/api/tracks/{id}",             get(tracks::get))
         .route("/api/tracks/{id}/status",      post(tracks::set_status))
