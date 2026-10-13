@@ -1,0 +1,7 @@
+target/
+data/
+.git/
+.claude/
+*.db
+*.db-*
+.DS_Store
