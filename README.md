@@ -82,7 +82,8 @@ just test-live       # hits real SoundCloud
 - [x] `server`: HTMX + Askama UI (search, queue, digests, settings)
 - [x] `server`: audio streaming (HLS proxy), WebSocket live updates
 - [x] `server`: app password auth + SoundCloud PKCE OAuth flow
-- [ ] Docker + Unraid deploy
+- [x] Docker + Unraid deploy
+- [x] `core`: graph crawl ("dig from hearts") through likers and reposters
 - [ ] Track acquisition (yt-dlp subprocess)
 - [ ] Web Audio API features (waveform, A/B preview)
 - [ ] Continuous autoplay

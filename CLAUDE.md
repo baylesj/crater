@@ -25,6 +25,9 @@ All three crates are implemented and the server runs end-to-end.
 - `crates/core/` — **implemented**. SQLite schema via sqlx migrations,
   `Crater` facade, track upsert/status, session streaming, digest
   CRUD, digest runner, HLS stream URL resolution, kv store.
+  `dig.rs` is the graph crawl (likers/reposters of hearted tracks →
+  curators → their likes), the main discovery path since 2026-10; its
+  module doc explains the scoring. Keyword search is secondary.
 - `crates/server/` — **implemented**. axum HTTP API, HTMX + Askama
   UI, WebSocket live updates, audio proxy, scheduler, settings page,
   optional app password auth, SoundCloud PKCE OAuth flow.
@@ -133,8 +136,9 @@ User's browser (LAN)
 - Rate-limit retry policy (docs/02) — current plan: one retry with
   30s backoff, then surface. Check `digest_runner.rs` for current
   behavior.
-- Docker packaging — the server works locally; multi-stage Dockerfile
-  for Unraid has not been written yet.
+- Dig tuning — scoring constants in `core/src/dig.rs` were tuned on
+  one 11-seed graph. Judge changes by hit rate (hearts per dig), and use
+  `cargo run -p crater-core --example dig -- <data_dir>` on a DB copy.
 
 ## Running the project
 
@@ -189,5 +193,12 @@ Docker container on Unraid. Single image, multi-stage build
 (Rust builder → debian slim runtime). Volumes: `/data` (SQLite
 + config), `/music` (acquired audio, future). Port 8080.
 
-Not a priority for the first few sessions — get the app working
-locally first, then package.
+Deployed as the `crater` stack in `baylesj/unraid-config`
+(`stacks/crater/compose.yaml`), built on the server straight from this
+repo's GitHub branch, at crater-alpha.bayl.es behind Pocket ID via
+oauth2-proxy (so `CRATER_PASSWORD` stays unset). Data in
+`/mnt/cache/appdata/crater`.
+
+Local builds: if `ring` fails with `TargetConditionals.h not found`,
+`SDKROOT` points at a missing Xcode.app SDK; build with
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`.
